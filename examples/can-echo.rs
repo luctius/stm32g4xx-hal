@@ -62,8 +62,8 @@ fn main() -> ! {
 
     let mut can2 = {
         let gpiob = dp.GPIOB.split(&mut rcc);
-        let rx = gpiob.pb5.into_alternate();
-        let tx = gpiob.pb6.into_alternate();
+        let rx = gpiob.pb12.into_alternate();
+        let tx = gpiob.pb13.into_alternate();
 
         let can = crate::hal::can::FdCan::new(dp.FDCAN2, (tx, rx), &rcc);
         let mut can = FdCan::new(can).into_config_mode();

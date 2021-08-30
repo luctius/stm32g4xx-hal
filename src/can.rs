@@ -3,8 +3,9 @@
 
 use crate::fdcan;
 use crate::fdcan::message_ram;
+// use crate::stm32::{self, FDCAN1, FDCAN2, FDCAN3};
 use crate::rcc::Rcc;
-use crate::stm32::{self, FDCAN1, FDCAN2, FDCAN3};
+use crate::stm32;
 
 mod sealed {
     pub trait Sealed {}
@@ -34,23 +35,108 @@ macro_rules! pins {
 }
 
 //TODO: verify correct pins
-mod common_pins {
+mod fdcan1 {
+    use super::FdCan;
+    use crate::fdcan;
+    use crate::fdcan::message_ram;
     use crate::gpio::{
         gpioa::{PA11, PA12},
-        gpiob::{PB12, PB13, PB5, PB6, PB8, PB9},
+        gpiob::{PB8, PB9},
         gpiod::{PD0, PD1},
-        AF7,
+        AF1, AF2, AF4, AF6, AF7,
     };
-    use crate::stm32::{FDCAN1, FDCAN2};
-    // All STM32F4 models with CAN support these pins
+    use crate::rcc::Rcc;
+    use crate::stm32;
+    use crate::stm32::FDCAN1;
+
+    // All STM32G4 models with CAN support these pins
     pins! {
-        FDCAN1 => (PA12<AF7>, PA11<AF7>),
-        FDCAN1 => (PD1<AF7>,  PD0<AF7>),
-        FDCAN1 => (PB9<AF7>,  PB8<AF7>),
-        FDCAN2 => (PB13<AF7>, PB12<AF7>),
-        FDCAN2 => (PB6<AF7>, PB5<AF7>),
+        FDCAN1 => (PA12<AF4>, PA11<AF4>),
+        FDCAN1 => (PB9<AF7>, PB8<AF6>),
+        FDCAN1 => (PD1<AF2>, PD0<AF1>),
+    }
+
+    unsafe impl fdcan::Instance for FdCan<FDCAN1> {
+        const REGISTERS: *mut stm32::fdcan::RegisterBlock = FDCAN1::ptr() as *mut _;
+    }
+
+    unsafe impl message_ram::MsgRamExt for FdCan<FDCAN1> {
+        const MSG_RAM: *mut message_ram::RegisterBlock = (0x4000_ac00 as *mut _);
+    }
+
+    /// Implements sealed::Sealed and Enable for a CAN peripheral (e.g. CAN1)
+    impl crate::can::sealed::Sealed for crate::stm32::FDCAN1 {}
+    impl crate::can::Enable for crate::stm32::FDCAN1 {
+        #[inline(always)]
+        fn enable(rcc: &Rcc) {
+            // Enable peripheral
+            rcc.rb.apb1enr1.modify(|_, w| w.fdcanen().set_bit());
+        }
     }
 }
+
+#[cfg(any(feature = "stm32g474"))]
+mod fdcan2 {
+    use super::FdCan;
+    use crate::fdcan;
+    use crate::fdcan::message_ram;
+    use crate::gpio::{
+        gpiob::{PB5, PB6, PB12, PB13},
+        AF4, AF6, AF8
+    };
+    use crate::rcc::Rcc;
+    use crate::stm32::{self, FDCAN2};
+
+    pins! {
+        FDCAN2 => (PB13<AF4>, PB12<AF6>),
+        FDCAN2 => (PB6<AF6>, PB5<AF8>),
+    }
+
+    unsafe impl fdcan::Instance for FdCan<FDCAN2> {
+        const REGISTERS: *mut stm32::fdcan::RegisterBlock = FDCAN2::ptr() as *mut _;
+    }
+
+    unsafe impl message_ram::MsgRamExt for FdCan<FDCAN2> {
+        const MSG_RAM: *mut message_ram::RegisterBlock = (0x4000_af54 as *mut _);
+    }
+
+    impl crate::can::sealed::Sealed for crate::stm32::FDCAN2 {}
+    impl crate::can::Enable for crate::stm32::FDCAN2 {
+        #[inline(always)]
+        fn enable(rcc: &Rcc) {
+            // Enable peripheral
+            rcc.rb.apb1enr1.modify(|_, w| w.fdcanen().set_bit());
+        }
+    }
+}
+
+#[cfg(any(feature = "stm32g474"))]
+mod fdcan3 {
+    use super::FdCan;
+    use crate::fdcan;
+    use crate::fdcan::message_ram;
+    use crate::gpio::{
+        gpioa::{PA15, PA8},
+        gpiob::{PB3, PB4},
+        AF8, AF9,
+    };
+    use crate::rcc::Rcc;
+    use crate::stm32::{self, FDCAN3};
+
+    pins! {
+        FDCAN3 => (PA15<AF9>, PA8<AF8>),
+        FDCAN3 => (PB4<AF8>, PB3<AF9>),
+    }
+
+    unsafe impl fdcan::Instance for FdCan<FDCAN3> {
+        const REGISTERS: *mut stm32::fdcan::RegisterBlock = FDCAN3::ptr() as *mut _;
+    }
+
+    unsafe impl message_ram::MsgRamExt for FdCan<FDCAN3> {
+        const MSG_RAM: *mut message_ram::RegisterBlock = (0x4000_b2a4 as *mut _);
+    }
+}
+
 /*
 //TODO: add other types
 //TODO: verify correct pins
@@ -116,26 +202,6 @@ pub trait Enable: sealed::Sealed {
     fn enable(rcc: &Rcc);
 }
 
-/// Implements sealed::Sealed and Enable for a CAN peripheral (e.g. CAN1)
-///
-/// $peren is the index in RCC_APB1ENR of the enable bit for the CAN peripheral, and the
-/// index in RCC_APB1RSTR of the reset bit for the CAN peripheral.
-impl crate::can::sealed::Sealed for crate::stm32::FDCAN1 {}
-impl crate::can::Enable for crate::stm32::FDCAN1 {
-    #[inline(always)]
-    fn enable(rcc: &Rcc) {
-        // Enable peripheral
-        rcc.rb.apb1enr1.modify(|_, w| w.fdcanen().set_bit());
-    }
-}
-impl crate::can::sealed::Sealed for crate::stm32::FDCAN2 {}
-impl crate::can::Enable for crate::stm32::FDCAN2 {
-    #[inline(always)]
-    fn enable(rcc: &Rcc) {
-        // Enable peripheral
-        rcc.rb.apb1enr1.modify(|_, w| w.fdcanen().set_bit());
-    }
-}
 /*
 /// Pins and definitions for models with a third CAN peripheral
 #[cfg(any(feature = "stm32f413", feature = "stm32f423"))]
@@ -184,28 +250,4 @@ where
         Instance::enable(rcc);
         FdCan { _peripheral: can }
     }
-}
-
-unsafe impl fdcan::Instance for FdCan<FDCAN1> {
-    const REGISTERS: *mut stm32::fdcan::RegisterBlock = FDCAN1::ptr() as *mut _;
-}
-
-unsafe impl fdcan::Instance for FdCan<FDCAN2> {
-    const REGISTERS: *mut stm32::fdcan::RegisterBlock = FDCAN2::ptr() as *mut _;
-}
-
-unsafe impl fdcan::Instance for FdCan<FDCAN3> {
-    const REGISTERS: *mut stm32::fdcan::RegisterBlock = FDCAN3::ptr() as *mut _;
-}
-
-unsafe impl message_ram::MsgRamExt for FdCan<FDCAN1> {
-    const MSG_RAM: *mut message_ram::RegisterBlock = (0x4000_ac00 as *mut _);
-}
-
-unsafe impl message_ram::MsgRamExt for FdCan<FDCAN2> {
-    const MSG_RAM: *mut message_ram::RegisterBlock = (0x4000_af54 as *mut _);
-}
-
-unsafe impl message_ram::MsgRamExt for FdCan<FDCAN3> {
-    const MSG_RAM: *mut message_ram::RegisterBlock = (0x4000_b2a4 as *mut _);
 }
