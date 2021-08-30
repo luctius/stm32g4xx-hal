@@ -128,7 +128,7 @@ impl<'a> ID_W<'a> {
     #[allow(dead_code)]
     pub unsafe fn bits(self, value: u32) -> &'a mut W {
         self.w.bits[0] =
-            (self.w.bits[0] & !(0x0FFFFFFF << 0)) | (((value as u32) & 0x0FFFFFFF) << 0);
+            (self.w.bits[0] & !(0x0FFFFFFF)) | ((value as u32) & 0x0FFFFFFF);
         self.w
     }
 }
@@ -292,7 +292,7 @@ impl R {
     #[doc = "Byte 0 - Bits 0:28 - ID"]
     #[inline(always)]
     pub fn id(&self) -> ID_R {
-        ID_R::new(((self.bits[0] >> 0) & 0x1FFFFFFF) as u32)
+        ID_R::new(((self.bits[0]) & 0x1FFFFFFF) as u32)
     }
     #[doc = "Byte 0 - Bit 29 - RTR"]
     #[inline(always)]

@@ -84,14 +84,14 @@ impl FDF_R {
     pub fn frame_format(&self) -> FrameFormat {
         match self.bits() {
             false => FrameFormat::Standard,
-            true => FrameFormat::FDCAN,
+            true => FrameFormat::Fdcan,
         }
     }
     pub fn is_standard_format(&self) -> bool {
         *self == FrameFormat::Standard
     }
     pub fn is_fdcan_format(&self) -> bool {
-        *self == FrameFormat::FDCAN
+        *self == FrameFormat::Fdcan
     }
 }
 

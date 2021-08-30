@@ -18,13 +18,13 @@ pub enum FrameFormat {
     /// Frame used by Classic CAN
     Standard = 0,
     /// New frame format used by FdCan
-    FDCAN = 1,
+    Fdcan = 1,
 }
 impl From<FrameFormat> for PacFrameFormat {
     fn from(ff: FrameFormat) -> Self {
         match ff {
             FrameFormat::Standard => PacFrameFormat::Standard,
-            FrameFormat::FDCAN => PacFrameFormat::FDCAN,
+            FrameFormat::Fdcan => PacFrameFormat::Fdcan,
         }
     }
 }
@@ -32,7 +32,7 @@ impl From<PacFrameFormat> for FrameFormat {
     fn from(ff: PacFrameFormat) -> Self {
         match ff {
             PacFrameFormat::Standard => FrameFormat::Standard,
-            PacFrameFormat::FDCAN => FrameFormat::FDCAN,
+            PacFrameFormat::Fdcan => FrameFormat::Fdcan,
         }
     }
 }

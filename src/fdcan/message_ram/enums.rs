@@ -4,7 +4,7 @@
 #[cfg_attr(feature = "unstable-defmt", derive(defmt::Format))]
 pub enum DataLength {
     Standard(u8),
-    FDCAN(u8),
+    Fdcan(u8),
 }
 impl DataLength {
     /// Creates a DataLength type
@@ -16,8 +16,8 @@ impl DataLength {
                 0..=8 => DataLength::Standard(len),
                 _ => panic!("DataLength > 8"),
             },
-            FrameFormat::FDCAN => match len {
-                0..=64 => DataLength::FDCAN(len),
+            FrameFormat::Fdcan => match len {
+                0..=64 => DataLength::Fdcan(len),
                 _ => panic!("DataLength > 64"),
             },
         }
@@ -28,20 +28,20 @@ impl DataLength {
     }
     /// Specialised function to create FDCAN frames
     pub fn new_fdcan(len: u8) -> DataLength {
-        Self::new(len, FrameFormat::FDCAN)
+        Self::new(len, FrameFormat::Fdcan)
     }
 
     /// returns the length in bytes
     pub fn len(&self) -> u8 {
         match self {
-            DataLength::Standard(l) | DataLength::FDCAN(l) => *l,
+            DataLength::Standard(l) | DataLength::Fdcan(l) => *l,
         }
     }
 
     pub(crate) fn dlc(&self) -> u8 {
         match self {
             DataLength::Standard(l) => *l,
-            DataLength::FDCAN(l) => match l {
+            DataLength::Fdcan(l) => match l {
                 0..=8 => *l,
                 9..=12 => 12,
                 13..=16 => 16,
@@ -59,7 +59,7 @@ impl From<DataLength> for FrameFormat {
     fn from(dl: DataLength) -> FrameFormat {
         match dl {
             DataLength::Standard(_) => FrameFormat::Standard,
-            DataLength::FDCAN(_) => FrameFormat::FDCAN,
+            DataLength::Fdcan(_) => FrameFormat::Fdcan,
         }
     }
 }
@@ -122,7 +122,7 @@ impl From<ErrorStateIndicator> for bool {
 #[cfg_attr(feature = "unstable-defmt", derive(defmt::Format))]
 pub enum FrameFormat {
     Standard = 0,
-    FDCAN = 1,
+    Fdcan = 1,
 }
 impl From<FrameFormat> for bool {
     #[inline(always)]

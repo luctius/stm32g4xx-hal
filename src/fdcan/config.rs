@@ -37,7 +37,7 @@ impl NominalBitTiming {
     }
     #[inline]
     pub(crate) fn ntseg1(&self) -> u8 {
-        self.seg1 & 0xFF
+        self.seg1
     }
     #[inline]
     pub(crate) fn ntseg2(&self) -> u8 {

@@ -49,7 +49,7 @@ fn main() -> ! {
         let rx = gpioa.pa11.into_alternate();
         let tx = gpioa.pa12.into_alternate();
 
-        let can = crate::hal::can::FdCan::new(dp.FDCAN1, (tx, rx), &mut rcc);
+        let can = crate::hal::can::FdCan::new(dp.FDCAN1, (tx, rx), &rcc);
         let mut can = FdCan::new(can).into_config_mode();
 
         can.set_nominal_bit_timing(btr);
@@ -65,7 +65,7 @@ fn main() -> ! {
         let rx = gpiob.pb5.into_alternate();
         let tx = gpiob.pb6.into_alternate();
 
-        let can = crate::hal::can::FdCan::new(dp.FDCAN2, (tx, rx), &mut rcc);
+        let can = crate::hal::can::FdCan::new(dp.FDCAN2, (tx, rx), &rcc);
         let mut can = FdCan::new(can).into_config_mode();
 
         can.set_nominal_bit_timing(btr);

@@ -190,7 +190,7 @@ where
 
     #[inline]
     fn msg_ram_mut(&mut self) -> &mut message_ram::RegisterBlock {
-        unsafe { &mut *I::MSG_RAM }
+        self.instance().msg_ram_mut()
     }
 
     #[inline]
@@ -358,6 +358,7 @@ where
 
     /// Splits this `FdCan` instance into transmitting and receiving halves, by reference.
     #[inline]
+    #[allow(clippy::type_complexity)]
     fn split_by_ref_generic(
         &mut self,
     ) -> (
@@ -375,6 +376,7 @@ where
 
     /// Consumes this `FdCan` instance and splits it into transmitting and receiving halves.
     #[inline]
+    #[allow(clippy::type_complexity)]
     fn split_generic(
         self,
     ) -> (
@@ -389,6 +391,7 @@ where
 
     /// Combines an FdCanControl, Tx and the two Rx instances back into an FdCan instance
     #[inline]
+    #[allow(clippy::type_complexity)]
     pub fn combine(
         t: (
             FdCanControl<I, MODE>,
@@ -799,6 +802,7 @@ where
 {
     /// Splits this `FdCan` instance into transmitting and receiving halves, by reference.
     #[inline]
+    #[allow(clippy::type_complexity)]
     pub fn split_by_ref(
         &mut self,
     ) -> (
@@ -811,6 +815,7 @@ where
     }
 
     /// Consumes this `FdCan` instance and splits it into transmitting and receiving halves.
+    #[allow(clippy::type_complexity)]
     pub fn split(
         self,
     ) -> (
@@ -985,6 +990,7 @@ where
     #[inline]
     unsafe fn conjure_by_ref<'a>() -> &'a mut Self {
         // Cause out of bounds access when `Self` is not zero-sized.
+        #[allow(clippy::unnecessary_operation)]
         [()][core::mem::size_of::<Self>()];
 
         // Any aligned pointer is valid for ZSTs.
@@ -998,12 +1004,12 @@ where
 
     #[inline]
     fn tx_msg_ram(&self) -> &message_ram::Transmit {
-        unsafe { &(&*I::MSG_RAM).transmit }
+        unsafe { &(*I::MSG_RAM).transmit }
     }
 
     #[inline]
     fn tx_msg_ram_mut(&mut self) -> &mut message_ram::Transmit {
-        unsafe { &mut (&mut *I::MSG_RAM).transmit }
+        unsafe { &mut (*I::MSG_RAM).transmit }
     }
 
     /// Puts a CAN frame in a transmit mailbox for transmission on the bus.
@@ -1140,11 +1146,7 @@ where
             let header: TxFrameHeader = (&self.tx_msg_ram().tbsa[idx as usize].header).into();
             let old_id: IdReg = header.into();
 
-            if id <= old_id {
-                false
-            } else {
-                true
-            }
+            id > old_id
         } else {
             true
         }
@@ -1174,29 +1176,25 @@ where
         result
     }
 
-    #[inline]
-    fn abort_pending_mailbox<PTX, R>(&mut self, idx: Mailbox, pending: Option<PTX>) -> Option<R>
-    where
-        PTX: FnOnce(Mailbox, TxFrameHeader, &[u32]) -> R,
-    {
-        if self.abort(idx) {
-            let tx_ram = self.tx_msg_ram();
+    // #[inline]
+    // fn abort_pending_mailbox<PTX, R>(&mut self, idx: Mailbox, pending: Option<PTX>) -> Option<R>
+    // where
+    //     PTX: FnOnce(Mailbox, TxFrameHeader, &[u32]) -> R,
+    // {
+    //     if self.abort(idx) {
+    //         let tx_ram = self.tx_msg_ram();
 
-            //read back header section
-            let header = (&tx_ram.tbsa[idx as usize].header).into();
-            if let Some(pending) = pending {
-                Some(pending(idx, header, &tx_ram.tbsa[idx as usize].data))
-            } else {
-                None
-            }
-        } else {
-            // Abort request failed because the frame was already sent (or being sent) on
-            // the bus. All mailboxes are now free. This can happen for small prescaler
-            // values (e.g. 1MBit/s bit timing with a source clock of 8MHz) or when an ISR
-            // has preempted the execution.
-            None
-        }
-    }
+    //         //read back header section
+    //         let header = (&tx_ram.tbsa[idx as usize].header).into();
+    //         pending.map(|pending| pending(idx, header, &tx_ram.tbsa[idx as usize].data))
+    //     } else {
+    //         // Abort request failed because the frame was already sent (or being sent) on
+    //         // the bus. All mailboxes are now free. This can happen for small prescaler
+    //         // values (e.g. 1MBit/s bit timing with a source clock of 8MHz) or when an ISR
+    //         // has preempted the execution.
+    //         None
+    //     }
+    // }
 
     /// Attempts to abort the sending of a frame that is pending in a mailbox.
     ///
@@ -1233,11 +1231,7 @@ where
         let can = self.registers();
         let idx: u8 = idx.into();
 
-        if can.txbrp.read().trp().bits() & idx != 0 {
-            true
-        } else {
-            false
-        }
+        can.txbrp.read().trp().bits() & idx != 0
     }
 
     /// Returns `true` if no frame is pending for transmission.
@@ -1326,6 +1320,7 @@ where
     #[inline]
     unsafe fn conjure_by_ref<'a>() -> &'a mut Self {
         // Cause out of bounds access when `Self` is not zero-sized.
+        #[allow(clippy::unnecessary_operation)]
         [()][core::mem::size_of::<Self>()];
 
         // Any aligned pointer is valid for ZSTs.
@@ -1352,9 +1347,9 @@ where
             self.release_mailbox(mbox);
 
             if self.has_overrun() {
-                result.map(|r| ReceiveOverrun::NoOverrun(r))
+                result.map(ReceiveOverrun::NoOverrun)
             } else {
-                result.map(|r| ReceiveOverrun::Overrun(r))
+                result.map(ReceiveOverrun::Overrun)
             }
         } else {
             Err(nb::Error::WouldBlock)
@@ -1368,7 +1363,7 @@ where
 
     #[inline]
     fn rx_msg_ram(&self) -> &message_ram::Receive {
-        unsafe { &(&(&*I::MSG_RAM).receive)[FIFONR::NR] }
+        unsafe { &(&(*I::MSG_RAM).receive)[FIFONR::NR] }
     }
 
     #[inline]

@@ -29,7 +29,7 @@ impl StandardFilter {
             action: Action::StoreInFifo0,
         }
     }
-    
+
     /// Accept all messages in FIFO 1
     pub fn accept_all_into_fifo1() -> StandardFilter {
         StandardFilter {
@@ -40,7 +40,7 @@ impl StandardFilter {
             action: Action::StoreInFifo0,
         }
     }
-    
+
     /// Reject all messages
     pub fn reject_all() -> StandardFilter {
         StandardFilter {
@@ -51,7 +51,7 @@ impl StandardFilter {
             action: Action::Reject,
         }
     }
-    
+
     /// Disable the filter
     pub fn disable() -> StandardFilter {
         StandardFilter {
@@ -72,7 +72,7 @@ impl ExtendedFilter {
             action: Action::StoreInFifo0,
         }
     }
-    
+
     /// Accept all messages in FIFO 1
     pub fn accept_all_into_fifo1() -> ExtendedFilter {
         ExtendedFilter {
@@ -83,7 +83,7 @@ impl ExtendedFilter {
             action: Action::StoreInFifo0,
         }
     }
-    
+
     /// Reject all messages
     pub fn reject_all() -> ExtendedFilter {
         ExtendedFilter {
@@ -94,7 +94,7 @@ impl ExtendedFilter {
             action: Action::Reject,
         }
     }
-    
+
     /// Disable the filter
     pub fn disable() -> ExtendedFilter {
         ExtendedFilter {

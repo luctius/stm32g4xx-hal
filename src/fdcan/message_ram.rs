@@ -87,7 +87,10 @@ impl generic::Writable for TxBufferElementHeader {}
 /// Accessor for the FdCan Message Ram Area
 pub unsafe trait MsgRamExt {
     const MSG_RAM: *mut RegisterBlock;
-    fn msg_ram(&self) -> &mut RegisterBlock {
+    fn msg_ram(&self) -> &RegisterBlock {
+        unsafe { &*Self::MSG_RAM }
+    }
+    fn msg_ram_mut(&mut self) -> &mut RegisterBlock {
         unsafe { &mut *Self::MSG_RAM }
     }
 }
