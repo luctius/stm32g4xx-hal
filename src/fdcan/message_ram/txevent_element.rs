@@ -85,7 +85,7 @@ impl R {
     #[doc = "Byte 0 - Bits 0:28 - ID"]
     #[inline(always)]
     pub fn id(&self) -> ID_R {
-        ID_R::new(((self.bits[0] ) & 0x1FFFFFFF) as u32)
+        ID_R::new(((self.bits[0]) & 0x1FFFFFFF) as u32)
     }
     #[doc = "Byte 0 - Bit 29 - RTR"]
     #[inline(always)]
@@ -105,7 +105,7 @@ impl R {
     #[doc = "Byte 1 - Bits 0:15 - TXTS"]
     #[inline(always)]
     pub fn txts(&self) -> TXTS_R {
-        TXTS_R::new(((self.bits[1] ) & 0xFFFF) as u16)
+        TXTS_R::new(((self.bits[1]) & 0xFFFF) as u16)
     }
     #[doc = "Byte 1 - Bits 16:19 - DLC"]
     #[inline(always)]

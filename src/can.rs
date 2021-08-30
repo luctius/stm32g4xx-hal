@@ -81,8 +81,8 @@ mod fdcan2 {
     use crate::fdcan;
     use crate::fdcan::message_ram;
     use crate::gpio::{
-        gpiob::{PB5, PB6, PB12, PB13},
-        AF4, AF6, AF8
+        gpiob::{PB12, PB13, PB5, PB6},
+        AF4, AF6, AF8,
     };
     use crate::rcc::Rcc;
     use crate::stm32::{self, FDCAN2};

@@ -26,8 +26,7 @@ impl<'a> EFID2_W<'a> {
     #[doc = r"Writes raw bits to the field"]
     #[inline(always)]
     pub unsafe fn bits(self, value: u32) -> &'a mut W {
-        self.w.bits[1] =
-            (self.w.bits[1] & !(0x1FFFFFFF)) | ((value as u32) & 0x1FFFFFFF );
+        self.w.bits[1] = (self.w.bits[1] & !(0x1FFFFFFF)) | ((value as u32) & 0x1FFFFFFF);
         self.w
     }
 }
