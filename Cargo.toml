@@ -62,6 +62,7 @@ rtt-target = { version = "0.3.0", features = ["cortex-m"] }
 panic-rtt-target = { version = "0.1.1", features = ["cortex-m"] }
 mpu6050 = "0.1.4"
 
+#TODO: Separate feature sets
 [features]
 default = ["rt"]
 rt = ["stm32g4/rt"]
@@ -78,6 +79,52 @@ log-itm = ["cortex-m-log/itm"]
 log-rtt = []
 log-semihost = ["cortex-m-log/semihosting"]
 unstable-defmt = ["defmt"]
+
+[[example]]
+name = "adc-continious-dma"
+
+[[example]]
+name = "adc-continious"
+
+[[example]]
+name = "adc-one-shot-dma"
+
+[[example]]
+name = "adc-one-shot"
+
+[[example]]
+name = "blinky"
+
+[[example]]
+name = "blinky_delay"
+
+[[example]]
+name = "button"
+
+[[example]]
+name = "can-echo"
+required-features = ["stm32g4/stm32g474"]
+
+[[example]]
+name = "clockout"
+
+[[example]]
+name = "hello"
+
+[[example]]
+name = "i2c-mpu6050"
+
+[[example]]
+name = "i2c"
+
+[[example]]
+name = "uart-dma"
+
+[[example]]
+name = "uart-fifo"
+
+[[example]]
+name = "uart"
 
 [profile.dev]
 codegen-units = 1
