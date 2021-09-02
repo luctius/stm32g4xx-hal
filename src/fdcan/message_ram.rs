@@ -2,6 +2,8 @@ pub(crate) mod common;
 pub(crate) mod enums;
 pub(crate) mod generic;
 
+use generic::ResetValue;
+
 /// Number of Receive Fifos configured by this module
 pub const RX_FIFOS_MAX: u8 = 2;
 /// Number of Receive Messages per RxFifo configured by this module
@@ -22,22 +24,59 @@ pub struct RegisterBlock {
     pub(crate) receive: [Receive; RX_FIFOS_MAX as usize],
     pub(crate) transmit: Transmit,
 }
+impl RegisterBlock {
+    pub fn reset(&mut self) {
+        self.filters.reset();
+        self.receive[0].reset();
+        self.receive[1].reset();
+        self.transmit.reset();
+    }
+}
 
 #[repr(C)]
 pub(crate) struct Filters {
     pub(crate) flssa: [StandardFilter; STANDARD_FILTER_MAX as usize],
     pub(crate) flesa: [ExtendedFilter; EXTENDED_FILTER_MAX as usize],
 }
+impl Filters {
+    pub fn reset(&mut self) {
+        for sf in &mut self.flssa {
+            sf.reset();
+        }
+        for ef in &mut self.flesa {
+            ef.reset();
+        }
+    }
+}
 
 #[repr(C)]
 pub(crate) struct Receive {
     pub(crate) fxsa: [RxFifoElement; RX_FIFO_MAX as usize],
+}
+impl Receive {
+    pub fn reset(&mut self) {
+        for fe in &mut self.fxsa {
+            fe.header.reset();
+            fe.data = [0; 16];
+        }
+    }
 }
 
 #[repr(C)]
 pub(crate) struct Transmit {
     pub(crate) efsa: [TxEventElement; TX_EVENT_MAX as usize],
     pub(crate) tbsa: [TxBufferElement; TX_FIFO_MAX as usize],
+}
+impl Transmit {
+    pub fn reset(&mut self) {
+        for ee in &mut self.efsa {
+            ee.reset();
+        }
+        for be in &mut self.tbsa {
+            be.header.reset();
+            be.data = [0; 16];
+        }
+    }
 }
 
 pub(crate) mod standard_filter;
@@ -59,7 +98,7 @@ pub(crate) type TxEventElementType = [u32; 2];
 pub(crate) type TxEventElement = generic::Reg<TxEventElementType, _TxEventElement>;
 pub(crate) struct _TxEventElement;
 impl generic::Readable for TxEventElement {}
-// impl generic::Writable for TxEventElement {}
+impl generic::Writable for TxEventElement {}
 
 pub(crate) mod rxfifo_element;
 #[repr(C)]
@@ -71,6 +110,7 @@ pub(crate) type RxFifoElementHeaderType = [u32; 2];
 pub(crate) type RxFifoElementHeader = generic::Reg<RxFifoElementHeaderType, _RxFifoElement>;
 pub(crate) struct _RxFifoElement;
 impl generic::Readable for RxFifoElementHeader {}
+impl generic::Writable for RxFifoElementHeader {}
 
 pub(crate) mod txbuffer_element;
 #[repr(C)]

@@ -194,6 +194,11 @@ where
     }
 
     #[inline]
+    fn reset_msg_ram(&mut self) {
+        self.msg_ram_mut().reset();
+    }
+
+    #[inline]
     fn enter_init_mode(&mut self) {
         let can = self.registers();
 
@@ -206,15 +211,16 @@ where
     /// signals together.
     #[inline]
     fn set_loopback_mode(&mut self, mode: LoopbackMode) {
-        let can = self.registers();
-
-        let (mon, lbck) = match mode {
-            LoopbackMode::None => (false, false),
-            LoopbackMode::Internal => (true, true),
-            LoopbackMode::External => (true, false),
+        let (test, mon, lbck) = match mode {
+            LoopbackMode::None => (false, false, false),
+            LoopbackMode::Internal => (true, true, true),
+            LoopbackMode::External => (true, false, true),
         };
 
-        can.cccr.modify(|_, w| w.mon().bit(mon));
+        self.set_test_mode(test);
+        self.set_bus_monitoring_mode(mon);
+
+        let can = self.registers();
         can.test.modify(|_, w| w.lbck().bit(lbck));
     }
 
@@ -237,15 +243,16 @@ where
     }
 
     #[inline]
-    fn set_test_mode(&mut self, _enabled: bool) {
-        todo!();
+    fn set_test_mode(&mut self, enabled: bool) {
+        let can = self.registers();
+        can.cccr.modify(|_, w| w.test().bit(enabled));
     }
 
     #[inline]
     fn set_power_down_mode(&mut self, enabled: bool) {
         let can = self.registers();
-        can.cccr.modify(|_, w| w.csa().bit(enabled));
-        while can.cccr.read().csa().bit() == enabled {}
+        can.cccr.modify(|_, w| w.csr().bit(enabled));
+        while can.cccr.read().csa().bit() != enabled {}
     }
 
     /// Enable/Disable the specific Interrupt Line
@@ -423,13 +430,19 @@ where
         self.set_power_down_mode(false);
         self.enter_init_mode();
 
+        self.reset_msg_ram();
+        
         let can = self.registers();
 
         // Framework specific settings are set here. //
 
         // set TxBuffer to Queue Mode;
         // TODO: don't require this.
-        can.txbc.modify(|_, w| w.tfqm().set_bit());
+        // can.txbc.write(|w| w.tfqm().set_bit());
+        //FIXME: stm32g4 has the wrong layout here!
+        //We should be able to use the above,
+        //But right now, we just set the 24th bit.
+        can.txbc.write(|w| unsafe { w.bits(1_u32 << 24) });
 
         // set standard filters list size to 28
         // set extended filters list size to 8
@@ -630,7 +643,7 @@ where
     #[inline]
     pub fn set_non_iso_mode(&mut self, enabled: bool) {
         let can = self.registers();
-        can.cccr.modify(|_, w| w.niso().bit(!enabled));
+        can.cccr.modify(|_, w| w.niso().bit(enabled));
         self.control.config.non_iso_mode = enabled;
     }
 
@@ -665,7 +678,7 @@ where
     pub fn set_interrupt_line_config(&mut self, l0int: Interrupts) {
         let can = self.registers();
 
-        can.ils.write(|w| unsafe { w.bits(l0int.bits()) });
+        can.ils.modify(|_, w| unsafe { w.bits(l0int.bits()) });
 
         self.control.config.interrupt_line_config = l0int;
     }
@@ -675,12 +688,13 @@ where
     pub fn set_protocol_exception_handling(&mut self, enabled: bool) {
         let can = self.registers();
 
-        can.cccr.write(|w| w.pxhd().bit(enabled));
+        can.cccr.modify(|_, w| w.pxhd().bit(enabled));
 
         self.control.config.protocol_exception_handling = enabled;
     }
 
     /// Sets the General FdCAN clock divider for this instance
+    //TODO: ?clock divider is a shared register?
     #[inline]
     pub fn set_clock_divider(&mut self, div: ClockDivider) {
         let can = self.registers();
@@ -781,6 +795,18 @@ where
     }
 }
 
+/// states of the test.tx register
+pub enum TestTransmitPinState {
+    /// CAN core has control (default)
+    CoreHasControl = 0b00,
+    /// Sample point can be monitored
+    ShowSamplePoint = 0b01,
+    /// Set to Dominant (0) Level
+    SetDominant = 0b10,
+    /// Set to Recessive (1) Level
+    SetRecessive = 0b11,
+}
+
 impl<I> FdCan<I, TestMode>
 where
     I: Instance,
@@ -788,10 +814,25 @@ where
     /// Returns out of TestMode and back into ConfigMode
     #[inline]
     pub fn into_config_mode(mut self) -> FdCan<I, ConfigMode> {
-        self.set_test_mode(true);
+        self.set_test_mode(false);
         self.enter_init_mode();
 
         self.into_can_mode()
+    }
+
+    /// Sets the state of the receive pin to either Dominant (false), or Recessive (true)
+    pub fn set_receive_pin(&mut self, state: bool) {
+        let can = self.registers();
+
+        can.test.modify(|_, w| w.rx().bit(state));
+    }
+
+    /// Sets the state of the transmit pin according to TestTransmitPinState
+    pub fn set_transmit_pin(&mut self, state: TestTransmitPinState) {
+        let can = self.registers();
+
+        //SAFE: state has all possible values, and this can only occur in TestMode
+        can.test.modify(|_, w| unsafe { w.tx().bits(state as u8) });
     }
 }
 
@@ -1381,8 +1422,8 @@ where
     pub fn rx_fifo_is_empty(&self) -> bool {
         let can = self.registers();
         match FIFONR::NR {
-            0 => can.rxf0s.read().f0fl().bits() != 0,
-            1 => can.rxf1s.read().f1fl().bits() != 0,
+            0 => can.rxf0s.read().f0fl().bits() == 0,
+            1 => can.rxf1s.read().f1fl().bits() == 0,
             _ => unreachable!(),
         }
     }

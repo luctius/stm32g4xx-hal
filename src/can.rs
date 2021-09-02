@@ -43,7 +43,7 @@ mod fdcan1 {
         gpioa::{PA11, PA12},
         gpiob::{PB8, PB9},
         gpiod::{PD0, PD1},
-        AF1, AF2, AF4, AF6, AF7,
+        AF9,
     };
     use crate::rcc::Rcc;
     use crate::stm32;
@@ -51,9 +51,8 @@ mod fdcan1 {
 
     // All STM32G4 models with CAN support these pins
     pins! {
-        FDCAN1 => (PA12<AF4>, PA11<AF4>),
-        FDCAN1 => (PB9<AF7>, PB8<AF6>),
-        FDCAN1 => (PD1<AF2>, PD0<AF1>),
+        FDCAN1 => (PA12<AF9>, PA11<AF9>),
+        FDCAN1 => (PB9<AF9>, PB8<AF9>),
     }
 
     unsafe impl fdcan::Instance for FdCan<FDCAN1> {
@@ -69,6 +68,17 @@ mod fdcan1 {
     impl crate::can::Enable for crate::stm32::FDCAN1 {
         #[inline(always)]
         fn enable(rcc: &Rcc) {
+            // TODO: make this configurable
+            // Select P clock as FDCAN clock source
+            rcc.rb.ccipr.modify(|_, w| {
+                // This is sound, as `0b10` is a valid value for this field.
+                unsafe {
+                    w.fdcansel().bits(0b10);
+                }
+
+                w
+            });
+            
             // Enable peripheral
             rcc.rb.apb1enr1.modify(|_, w| w.fdcanen().set_bit());
         }
@@ -82,14 +92,15 @@ mod fdcan2 {
     use crate::fdcan::message_ram;
     use crate::gpio::{
         gpiob::{PB12, PB13, PB5, PB6},
-        AF4, AF6, AF8,
+        AF4, AF6, AF9,
     };
     use crate::rcc::Rcc;
     use crate::stm32::{self, FDCAN2};
 
     pins! {
         FDCAN2 => (PB13<AF4>, PB12<AF6>),
-        FDCAN2 => (PB6<AF6>, PB5<AF8>),
+        FDCAN2 => (PB13<AF4>, PB5<AF9>),
+        FDCAN2 => (PB6<AF9>, PB5<AF9>),
     }
 
     unsafe impl fdcan::Instance for FdCan<FDCAN2> {
@@ -106,6 +117,17 @@ mod fdcan2 {
         fn enable(rcc: &Rcc) {
             // Enable peripheral
             rcc.rb.apb1enr1.modify(|_, w| w.fdcanen().set_bit());
+
+            // TODO: make this configurable
+            // Select P clock as FDCAN clock source
+            rcc.rb.ccipr.modify(|_, w| {
+                // This is sound, as `0b10` is a valid value for this field.
+                unsafe {
+                    w.fdcansel().bits(0b10);
+                }
+
+                w
+            });
         }
     }
 }
@@ -118,14 +140,14 @@ mod fdcan3 {
     use crate::gpio::{
         gpioa::{PA15, PA8},
         gpiob::{PB3, PB4},
-        AF8, AF9,
+        AF11,
     };
     use crate::rcc::Rcc;
     use crate::stm32::{self, FDCAN3};
 
     pins! {
-        FDCAN3 => (PA15<AF9>, PA8<AF8>),
-        FDCAN3 => (PB4<AF8>, PB3<AF9>),
+        FDCAN3 => (PA15<AF11>, PA8<AF11>),
+        FDCAN3 => (PB4<AF11>, PB3<AF11>),
     }
 
     unsafe impl fdcan::Instance for FdCan<FDCAN3> {

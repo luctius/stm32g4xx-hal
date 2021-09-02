@@ -268,6 +268,7 @@ pub struct FdCanConfig {
     pub interrupt_line_config: Interrupts,
     /// Sets the timestamp source
     pub timestamp_source: TimestampSource,
+    //TODO: Config Global Filter
 }
 
 impl FdCanConfig {

@@ -4,6 +4,16 @@ use super::generic;
 
 #[doc = "Reader of register RxFifoElement"]
 pub(crate) type R = generic::R<super::RxFifoElementHeaderType, super::RxFifoElementHeader>;
+#[doc = "Writer for register ExtendedFilter"]
+pub(crate) type W = generic::W<super::RxFifoElementHeaderType, super::RxFifoElementHeader>;
+#[doc = "Register ExtendedFilter `reset()`'s"]
+impl generic::ResetValue for super::RxFifoElementHeader {
+    type Type = super::RxFifoElementHeaderType;
+    #[inline(always)]
+    fn reset_value() -> Self::Type {
+        [0x0, 0x0]
+    }
+}
 
 #[doc = "Reader of field `RXTS`"]
 pub(crate) type RXTS_R = generic::R<u16, u16>;

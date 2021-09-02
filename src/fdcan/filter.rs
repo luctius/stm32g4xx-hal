@@ -325,7 +325,7 @@ impl From<u8> for ExtendedFilterSlot {
             5 => ExtendedFilterSlot::_5,
             6 => ExtendedFilterSlot::_6,
             7 => ExtendedFilterSlot::_7,
-            _ => panic!("Extended Filter Slot Too High!"),
+            _ => panic!("Extended Filter Slot Too High!"), // Should be unreachable
         }
     }
 }
@@ -346,7 +346,7 @@ where
     UNIT: Copy + Clone + core::fmt::Debug,
 {
     fn activate(&mut self, f: Filter<ID, UNIT>);
-    fn read(&self) -> Filter<ID, UNIT>;
+    // fn read(&self) -> Filter<ID, UNIT>;
 }
 
 use super::message_ram;
@@ -371,9 +371,9 @@ impl ActivateFilter<StandardId, u16> for message_ram::StandardFilter {
                 .set_filter_element_config(sfec)
         });
     }
-    fn read(&self) -> Filter<StandardId, u16> {
-        todo!()
-    }
+    // fn read(&self) -> Filter<StandardId, u16> {
+    //     todo!()
+    // }
 }
 impl ActivateFilter<ExtendedId, u32> for message_ram::ExtendedFilter {
     fn activate(&mut self, f: Filter<ExtendedId, u32>) {
@@ -395,7 +395,7 @@ impl ActivateFilter<ExtendedId, u32> for message_ram::ExtendedFilter {
                 .set_filter_element_config(efec)
         });
     }
-    fn read(&self) -> Filter<ExtendedId, u32> {
-        todo!()
-    }
+    // fn read(&self) -> Filter<ExtendedId, u32> {
+    //     todo!()
+    // }
 }
