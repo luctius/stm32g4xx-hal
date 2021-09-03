@@ -157,16 +157,16 @@ pub(crate) struct IdReg(u32);
 impl IdReg {
     const STANDARD_SHIFT: u32 = 18;
     #[allow(dead_code)]
-    const STANDARD_MASK: u32 = !(1 << Self::STANDARD_SHIFT);
+    const STANDARD_MASK: u32 = 0x1FFC0000;
 
     const EXTENDED_SHIFT: u32 = 0;
-    const EXTENDED_MASK: u32 = !(1 << Self::EXTENDED_SHIFT);
+    const EXTENDED_MASK: u32 = 0x1FFFFFFF;
 
     const XTD_SHIFT: u32 = 30;
-    const XTD_MASK: u32 = !(1 << Self::XTD_SHIFT);
+    const XTD_MASK: u32 = 1 << Self::XTD_SHIFT;
 
     const RTR_SHIFT: u32 = 29;
-    const RTR_MASK: u32 = !(1 << Self::RTR_SHIFT);
+    const RTR_MASK: u32 = 1 << Self::RTR_SHIFT;
 
     /// Creates a new standard identifier (11bit, Range: 0..0x7FF)
     ///
@@ -179,7 +179,7 @@ impl IdReg {
     ///
     /// Panics for IDs outside the allowed range.
     fn new_extended(id: ExtendedId) -> Self {
-        Self(id.as_raw() << Self::EXTENDED_SHIFT | Self::XTD_MASK)
+        Self(id.as_raw() << Self::EXTENDED_SHIFT | (1 << Self::XTD_SHIFT))
     }
 
     pub(crate) fn as_raw_id(&self) -> u32 {
@@ -203,7 +203,7 @@ impl IdReg {
     #[must_use = "returns a new IdReg without modifying `self`"]
     pub(crate) fn with_rtr(self, rtr: bool) -> Self {
         if rtr {
-            Self(self.0 | Self::RTR_MASK)
+            Self(self.0 | (1 << Self::RTR_SHIFT))
         } else {
             Self(self.0 & !Self::RTR_MASK)
         }
@@ -222,7 +222,7 @@ impl IdReg {
 
     /// Returns `true` if the identifier is an extended identifier.
     pub fn is_extended(self) -> bool {
-        self.0 & Self::XTD_MASK != 0
+        (self.0 & Self::XTD_MASK) != 0
     }
 
     /// Returns `true` if the identifier is a standard identifier.

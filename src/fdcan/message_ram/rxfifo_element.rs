@@ -26,7 +26,7 @@ pub(crate) struct _ANMF;
 pub(crate) type ANMF_R = generic::R<bool, _ANMF>;
 impl ANMF_R {
     pub fn is_matching_frame(&self) -> bool {
-        self.bit_is_set()
+        self.bit_is_clear()
     }
 }
 

@@ -60,7 +60,7 @@ mod fdcan1 {
     }
 
     unsafe impl message_ram::MsgRamExt for FdCan<FDCAN1> {
-        const MSG_RAM: *mut message_ram::RegisterBlock = (0x4000_ac00 as *mut _);
+        const MSG_RAM: *mut message_ram::RegisterBlock = (0x4000_a400 as *mut _);
     }
 
     /// Implements sealed::Sealed and Enable for a CAN peripheral (e.g. CAN1)
@@ -78,7 +78,7 @@ mod fdcan1 {
 
                 w
             });
-            
+
             // Enable peripheral
             rcc.rb.apb1enr1.modify(|_, w| w.fdcanen().set_bit());
         }
@@ -108,7 +108,7 @@ mod fdcan2 {
     }
 
     unsafe impl message_ram::MsgRamExt for FdCan<FDCAN2> {
-        const MSG_RAM: *mut message_ram::RegisterBlock = (0x4000_af54 as *mut _);
+        const MSG_RAM: *mut message_ram::RegisterBlock = (0x4000_a754 as *mut _);
     }
 
     impl crate::can::sealed::Sealed for crate::stm32::FDCAN2 {}
@@ -155,7 +155,7 @@ mod fdcan3 {
     }
 
     unsafe impl message_ram::MsgRamExt for FdCan<FDCAN3> {
-        const MSG_RAM: *mut message_ram::RegisterBlock = (0x4000_b2a4 as *mut _);
+        const MSG_RAM: *mut message_ram::RegisterBlock = (0x4000_aaa0 as *mut _);
     }
 }
 

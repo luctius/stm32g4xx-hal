@@ -431,7 +431,7 @@ where
         self.enter_init_mode();
 
         self.reset_msg_ram();
-        
+
         let can = self.registers();
 
         // Framework specific settings are set here. //
@@ -652,7 +652,7 @@ where
     #[inline]
     pub fn set_edge_filtering(&mut self, enabled: bool) {
         let can = self.registers();
-        can.cccr.modify(|_, w| w.efbi().bit(!enabled));
+        can.cccr.modify(|_, w| w.efbi().bit(enabled));
         self.control.config.edge_filtering = enabled;
     }
 
@@ -820,11 +820,11 @@ where
         self.into_can_mode()
     }
 
-    /// Sets the state of the receive pin to either Dominant (false), or Recessive (true)
-    pub fn set_receive_pin(&mut self, state: bool) {
+    /// Gets the state of the receive pin to either Dominant (false), or Recessive (true)
+    pub fn get_receive_pin(&mut self) -> bool {
         let can = self.registers();
 
-        can.test.modify(|_, w| w.rx().bit(state));
+        can.test.read().rx().bit_is_set()
     }
 
     /// Sets the state of the transmit pin according to TestTransmitPinState
@@ -1200,6 +1200,9 @@ where
     {
         let tx_ram = self.tx_msg_ram_mut();
 
+        // Clear mail slot; mainly for debugging purposes.
+        tx_ram.tbsa[idx as usize].reset();
+
         // Calculate length of data in words
         let data_len = ((tx_header.len as usize) + 3) / 4;
 
@@ -1384,13 +1387,14 @@ where
             let mailbox: &RxFifoElement = &self.rx_msg_ram().fxsa[idx];
 
             let header: RxFrameInfo = (&mailbox.header).into();
-            let result = Ok(receive(header, &mailbox.data[0..header.len as usize]));
+            let word_len = (header.len + 3) / 4;
+            let result = Ok(receive(header, &mailbox.data[0..word_len as usize]));
             self.release_mailbox(mbox);
 
             if self.has_overrun() {
-                result.map(ReceiveOverrun::NoOverrun)
-            } else {
                 result.map(ReceiveOverrun::Overrun)
+            } else {
+                result.map(ReceiveOverrun::NoOverrun)
             }
         } else {
             Err(nb::Error::WouldBlock)
@@ -1430,6 +1434,10 @@ where
 
     #[inline]
     fn release_mailbox(&mut self, idx: Mailbox) {
+        unsafe {
+            (*I::MSG_RAM).receive[FIFONR::NR].fxsa[idx as u8 as usize].reset();
+        }
+
         let can = self.registers();
         match FIFONR::NR {
             0 => can.rxf0a.write(|w| unsafe { w.f0ai().bits(idx.into()) }),

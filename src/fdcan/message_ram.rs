@@ -56,8 +56,7 @@ pub(crate) struct Receive {
 impl Receive {
     pub fn reset(&mut self) {
         for fe in &mut self.fxsa {
-            fe.header.reset();
-            fe.data = [0; 16];
+            fe.reset();
         }
     }
 }
@@ -73,8 +72,7 @@ impl Transmit {
             ee.reset();
         }
         for be in &mut self.tbsa {
-            be.header.reset();
-            be.data = [0; 16];
+            be.reset();
         }
     }
 }
@@ -106,6 +104,12 @@ pub(crate) struct RxFifoElement {
     pub(crate) header: RxFifoElementHeader,
     pub(crate) data: [u32; 16], // TODO: Does this need to be volatile?
 }
+impl RxFifoElement {
+    pub(crate) fn reset(&mut self) {
+        self.header.reset();
+        self.data = [0; 16];
+    }
+}
 pub(crate) type RxFifoElementHeaderType = [u32; 2];
 pub(crate) type RxFifoElementHeader = generic::Reg<RxFifoElementHeaderType, _RxFifoElement>;
 pub(crate) struct _RxFifoElement;
@@ -117,6 +121,12 @@ pub(crate) mod txbuffer_element;
 pub(crate) struct TxBufferElement {
     pub(crate) header: TxBufferElementHeader,
     pub(crate) data: [u32; 16], // TODO: Does this need to be volatile?
+}
+impl TxBufferElement {
+    pub(crate) fn reset(&mut self) {
+        self.header.reset();
+        self.data = [0; 16];
+    }
 }
 pub(crate) type TxBufferElementHeader = generic::Reg<TxBufferElementHeaderType, _TxBufferElement>;
 pub(crate) type TxBufferElementHeaderType = [u32; 2];

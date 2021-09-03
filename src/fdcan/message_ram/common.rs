@@ -66,8 +66,8 @@ pub type BRS_R = generic::R<bool, BitRateSwitching>;
 impl BRS_R {
     pub fn bit_rate_switching(&self) -> BitRateSwitching {
         match self.bits() {
-            false => BitRateSwitching::WithBRS,
-            true => BitRateSwitching::WithoutBRS,
+            true => BitRateSwitching::WithBRS,
+            false => BitRateSwitching::WithoutBRS,
         }
     }
     pub fn is_with_brs(&self) -> bool {

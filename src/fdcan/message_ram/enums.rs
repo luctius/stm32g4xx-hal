@@ -167,10 +167,10 @@ impl From<RemoteTransmissionRequest> for bool {
 #[derive(Clone, Copy, Debug, PartialEq)]
 #[cfg_attr(feature = "unstable-defmt", derive(defmt::Format))]
 pub enum BitRateSwitching {
-    /// enable bit rate switching
-    WithBRS = 0,
     /// disable bit rate switching
-    WithoutBRS = 1,
+    WithoutBRS = 0,
+    /// enable bit rate switching
+    WithBRS = 1,
 }
 impl From<BitRateSwitching> for bool {
     #[inline(always)]

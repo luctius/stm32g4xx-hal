@@ -27,57 +27,57 @@ mod utils;
 fn main() -> ! {
     utils::logger::init();
 
-    info!("start");
+    info!("Start");
 
-    // APB1 (PCLK1): 8MHz, Bit rate: 125kBit/s, Sample Point 87.5%
+    // APB1 (PCLK1): 16MHz, Bit rate: 250kBit/s, Sample Point 87.5%
     // Value was calculated with http://www.bittiming.can-wiki.info/
     // TODO: use the can_bit_timings crate
     let btr = NominalBitTiming {
-        prescaler: 4,
+        prescaler: 8,
         seg1: 13,
         seg2: 2,
-        ..Default::default()
+        sync_jump_width: 1,
     };
+
+    info!("Init Clocks");
 
     let dp = Peripherals::take().unwrap();
     let _cp = cortex_m::Peripherals::take().expect("cannot take core peripherals");
     let rcc = dp.RCC.constrain();
     let mut rcc = rcc.freeze(Config::hsi());
 
+    info!("Split GPIO");
+
+    let gpioa = dp.GPIOA.split(&mut rcc);
+    let gpiob = dp.GPIOB.split(&mut rcc);
+
     let mut can1 = {
-        let gpioa = dp.GPIOA.split(&mut rcc);
-        let rx = gpioa.pa11.into_alternate();
-        let tx = gpioa.pa12.into_alternate();
+        info!("Init CAN 1");
+        let rx = gpiob.pb8.into_alternate();
+        let tx = gpiob.pb9.into_alternate();
 
+        info!("-- Create CAN 1 instance");
         let can = crate::hal::can::FdCan::new(dp.FDCAN1, (tx, rx), &rcc);
+
+        info!("-- Set CAN 1 in Config Mode");
         let mut can = FdCan::new(can).into_config_mode();
 
+        info!("-- Configure nominal timing");
         can.set_nominal_bit_timing(btr);
-        can.set_standard_filter(
-            StandardFilterSlot::_0,
-            StandardFilter::accept_all_into_fifo0(),
-        );
-        can.into_normal()
-    };
 
-    let mut can2 = {
-        let gpiob = dp.GPIOB.split(&mut rcc);
-        let rx = gpiob.pb12.into_alternate();
-        let tx = gpiob.pb13.into_alternate();
-
-        let can = crate::hal::can::FdCan::new(dp.FDCAN2, (tx, rx), &rcc);
-        let mut can = FdCan::new(can).into_config_mode();
-
-        can.set_nominal_bit_timing(btr);
+        info!("-- Configure Filters");
         can.set_standard_filter(
             StandardFilterSlot::_0,
             StandardFilter::accept_all_into_fifo0(),
         );
 
-        can.into_normal()
+        info!("-- Set CAN1 in to normal mode");
+        can.into_external_loopback()
     };
 
-    let mut buffer = [0_u32; 2];
+    info!("Create Message Data");
+    let mut buffer = [0xAABBCCDD, 0xEEFF0011];
+    info!("Create Message Header");
     let header = TxFrameHeader {
         len: buffer.len() as u8 * 4,
         id: StandardId::new(0x1).unwrap().into(),
@@ -85,26 +85,23 @@ fn main() -> ! {
         bit_rate_switching: false,
         marker: None,
     };
+    info!("Initial Header: {:?}", &header);
+
+    info!("Transmit initial message");
     block!(can1.transmit(header, &mut |b| b.clone_from_slice(&buffer))).unwrap();
 
     loop {
-        if let Ok(rxheader) = block!(can2.receive0(&mut |h, b| {
-            buffer.clone_from_slice(b);
-            h
-        })) {
-            block!(
-                can2.transmit(rxheader.unwrap().to_tx_header(None), &mut |b| b
-                    .clone_from_slice(&buffer))
-            )
-            .unwrap();
-        }
         if let Ok(rxheader) = block!(can1.receive0(&mut |h, b| {
+            info!("CAN 1 Receive");
+            info!("Received Header: {:?}", &h);
             buffer.clone_from_slice(b);
             h
         })) {
             block!(
-                can1.transmit(rxheader.unwrap().to_tx_header(None), &mut |b| b
-                    .clone_from_slice(&buffer))
+                can1.transmit(rxheader.unwrap().to_tx_header(None), &mut |b| {
+                    info!("CAN 1 Transmit");
+                    b.clone_from_slice(&buffer)
+                })
             )
             .unwrap();
         }
