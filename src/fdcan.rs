@@ -36,6 +36,7 @@ use message_ram::RxFifoElement;
 
 use core::cmp::Ord;
 use core::convert::Infallible;
+use core::convert::TryFrom;
 use core::marker::PhantomData;
 use core::ptr::NonNull;
 
@@ -92,6 +93,88 @@ enum LoopbackMode {
     None,
     Internal,
     External,
+}
+
+/// Bus Activity
+#[derive(Clone, Copy, Debug)]
+#[cfg_attr(feature = "unstable-defmt", derive(defmt::Format))]
+pub enum Activity {
+    /// Node is Synchronizing
+    Synchronizing = 0b00,
+    /// Node is Idle
+    Idle = 0b01,
+    /// Node is receiver only
+    Receiver = 0b10,
+    /// Node is transmitter only
+    Transmitter = 0b11,
+}
+impl TryFrom<u8> for Activity {
+    type Error = ();
+    fn try_from(value: u8) -> Result<Self, Self::Error> {
+        match value {
+            0b000 => Ok(Self::Synchronizing),
+            0b001 => Ok(Self::Idle),
+            0b010 => Ok(Self::Receiver),
+            0b011 => Ok(Self::Transmitter),
+            _ => Err(()),
+        }
+    }
+}
+
+/// Indicates the type of the last error which occurred on the CAN bus
+#[derive(Clone, Copy, Debug)]
+#[cfg_attr(feature = "unstable-defmt", derive(defmt::Format))]
+pub enum LastErrorCode {
+    /// There has been no error since last read
+    NoError = 0b000,
+    /// More than 5 equal bits in sequence are not allowed
+    StuffError = 0b001,
+    /// a fixed format part of ta received frame had the wrong format
+    FormError = 0b010,
+    /// message tramsitted by this node was not acknowledged by another
+    AckError = 0b011,
+    /// During transmit, the node wanted to send a 1 but monitored a 0
+    Bit1Error = 0b100,
+    /// During transmit, the node wanted to send a 0 but monitored a 1
+    Bit0Error = 0b101,
+    /// CRC checksum of a received message was incorrect
+    CRCError = 0b110,
+    /// No CAN bus event detected since last read
+    NoChange = 0b111,
+}
+impl TryFrom<u8> for LastErrorCode {
+    type Error = ();
+    fn try_from(value: u8) -> Result<Self, Self::Error> {
+        match value {
+            0b000 => Ok(Self::NoError),
+            0b001 => Ok(Self::StuffError),
+            0b010 => Ok(Self::FormError),
+            0b011 => Ok(Self::AckError),
+            0b100 => Ok(Self::Bit1Error),
+            0b101 => Ok(Self::Bit0Error),
+            0b110 => Ok(Self::CRCError),
+            0b111 => Ok(Self::NoChange),
+            _ => Err(()),
+        }
+    }
+}
+
+/// Some status indications regarding the FDCAN protocl
+#[derive(Clone, Copy, Debug)]
+#[cfg_attr(feature = "unstable-defmt", derive(defmt::Format))]
+pub struct ProtocolStatus {
+    /// Type of current activity
+    activity: Activity,
+    /// Transmitter delay companstation
+    transmitter_delay_comp: u8,
+    /// But Off Status
+    bus_off_status: bool,
+    /// Shows if Error counters are aat their limit of 96
+    error_warning: bool,
+    /// Shows if the node send and active error flag (false) or stays silent (true).
+    error_passive_state: bool,
+    /// Indicates te last type of error which occurred on the CAN bus.
+    last_error: LastErrorCode,
 }
 
 /// Allows for Transmit Operations
@@ -207,6 +290,12 @@ where
         can.cccr.modify(|_, w| w.cce().set_bit());
     }
 
+    /// Returns the current FDCAN config settings
+    #[inline]
+    pub fn get_config(&self) -> FdCanConfig {
+        self.control.config
+    }
+
     /// Enables or disables loopback mode: Internally connects the TX and RX
     /// signals together.
     #[inline]
@@ -239,7 +328,7 @@ where
 
     #[inline]
     fn set_normal_operations(&mut self, _enabled: bool) {
-        //nop
+        self.set_loopback_mode(LoopbackMode::None);
     }
 
     #[inline]
@@ -361,6 +450,19 @@ where
     /// information, call [`FdCan::clear_request_completed_flag`] instead.
     pub fn clear_tx_interrupt(&mut self) {
         while self.clear_request_completed_flag().is_some() {}
+    }
+
+    /// Retrieve the current protocol status
+    pub fn get_protocol_status(&self) -> ProtocolStatus {
+        let psr = self.registers().psr.read();
+        ProtocolStatus {
+            activity: Activity::try_from(0 /*psr.act().bits()*/).unwrap(), //TODO: stm32g4 does not allow reading from this register
+            transmitter_delay_comp: psr.tdcv().bits(),
+            bus_off_status: psr.bo().bit_is_set(),
+            error_warning: psr.ew().bit_is_set(),
+            error_passive_state: psr.ep().bit_is_set(),
+            last_error: LastErrorCode::try_from(psr.lec().bits()).unwrap(),
+        }
     }
 
     /// Splits this `FdCan` instance into transmitting and receiving halves, by reference.
@@ -587,13 +689,13 @@ where
         let can = self.registers();
         can.nbtp.write(|w| unsafe {
             w.nbrp()
-                .bits(btr.nbrp())
+                .bits(btr.nbrp() - 1)
                 .ntseg1()
-                .bits(btr.ntseg1())
+                .bits(btr.ntseg1() - 1)
                 .ntseg2()
-                .bits(btr.ntseg2())
+                .bits(btr.ntseg2() - 1)
                 .nsjw()
-                .bits(btr.nsjw())
+                .bits(btr.nsjw() - 1)
         });
     }
 
@@ -606,13 +708,13 @@ where
         let can = self.registers();
         can.dbtp.write(|w| unsafe {
             w.dbrp()
-                .bits(btr.dbrp())
+                .bits(btr.dbrp() - 1)
                 .dtseg1()
-                .bits(btr.dtseg1())
+                .bits(btr.dtseg1() - 1)
                 .dtseg2()
-                .bits(btr.dtseg2())
+                .bits(btr.dtseg2() - 1)
                 .dsjw()
-                .bits(btr.dsjw())
+                .bits(btr.dsjw() - 1)
         });
     }
 
@@ -688,7 +790,7 @@ where
     pub fn set_protocol_exception_handling(&mut self, enabled: bool) {
         let can = self.registers();
 
-        can.cccr.modify(|_, w| w.pxhd().bit(enabled));
+        can.cccr.modify(|_, w| w.pxhd().bit(!enabled));
 
         self.control.config.protocol_exception_handling = enabled;
     }

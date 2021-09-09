@@ -23,8 +23,8 @@ pub trait Pins: sealed::Sealed {
 macro_rules! pins {
     ($($PER:ident => ($tx:ident<$txaf:ident>, $rx:ident<$rxaf:ident>),)+) => {
         $(
-            impl crate::can::sealed::Sealed for ($tx<crate::gpio::Alternate<$txaf>>, $rx<crate::gpio::Alternate<$rxaf>>) {}
-            impl crate::can::Pins for ($tx<crate::gpio::Alternate<$txaf>>, $rx<crate::gpio::Alternate<$rxaf>>) {
+            impl crate::can::sealed::Sealed for ($tx<crate::gpio::AlternateOD<$txaf>>, $rx<crate::gpio::AlternateOD<$rxaf>>) {}
+            impl crate::can::Pins for ($tx<crate::gpio::AlternateOD<$txaf>>, $rx<crate::gpio::AlternateOD<$rxaf>>) {
                 type Instance = $PER;
             }
         )+

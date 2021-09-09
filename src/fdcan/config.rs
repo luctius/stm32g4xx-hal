@@ -1,4 +1,5 @@
 pub use super::interrupt::{Interrupt, InterruptLine, Interrupts};
+use core::num::{NonZeroU8,NonZeroU16};
 
 /// Configures the bit timings.
 ///
@@ -16,36 +17,31 @@ pub use super::interrupt::{Interrupt, InterruptLine, Interrupts};
 #[cfg_attr(feature = "unstable-defmt", derive(defmt::Format))]
 pub struct NominalBitTiming {
     /// Value by which the oscillator frequency is divided for generating the bit time quanta. The bit
-    /// time is built up from a multiple of this quanta. Valid values are 0 to 511. The actual
-    /// interpretation by the hardware of this value is such that one more than the value programmed
-    /// here is used.
-    pub prescaler: u16,
-    /// Valid values are 0 to 127. The actual interpretation by the hardware of this value is such that
-    /// one more than the programmed value is used.
-    pub seg1: u8,
-    /// Valid values are 0 to 255. The actual interpretation by the hardware of this value is such that
-    /// one more than the programmed value is used.
-    pub seg2: u8,
-    /// Valid values are 0 to 127. The actual interpretation by the hardware of this value is such that
-    /// the used value is the one programmed incremented by one.
-    pub sync_jump_width: u8,
+    /// time is built up from a multiple of this quanta. Valid values are 1 to 512.
+    pub prescaler: NonZeroU16,
+    /// Valid values are 1 to 128.
+    pub seg1: NonZeroU8,
+    /// Valid values are 1 to 255.
+    pub seg2: NonZeroU8,
+    /// Valid values are 1 to 128.
+    pub sync_jump_width: NonZeroU8,
 }
 impl NominalBitTiming {
     #[inline]
     pub(crate) fn nbrp(&self) -> u16 {
-        self.prescaler & 0x1FF
+        u16::from(self.prescaler) & 0x1FF
     }
     #[inline]
     pub(crate) fn ntseg1(&self) -> u8 {
-        self.seg1
+        u8::from(self.seg1)
     }
     #[inline]
     pub(crate) fn ntseg2(&self) -> u8 {
-        self.seg2 & 0x7F
+        u8::from(self.seg2) & 0x7F
     }
     #[inline]
     pub(crate) fn nsjw(&self) -> u8 {
-        self.sync_jump_width & 0x7F
+        u8::from(self.sync_jump_width) & 0x7F
     }
 }
 
@@ -53,10 +49,10 @@ impl Default for NominalBitTiming {
     #[inline]
     fn default() -> Self {
         Self {
-            prescaler: 0,
-            seg1: 0xA,
-            seg2: 0x3,
-            sync_jump_width: 0x3,
+            prescaler: NonZeroU16::new(1).unwrap(),
+            seg1: NonZeroU8::new(0xA).unwrap(),
+            seg2: NonZeroU8::new(0x3).unwrap(),
+            sync_jump_width: NonZeroU8::new(0x3).unwrap(),
         }
     }
 }
@@ -69,18 +65,15 @@ pub struct DataBitTiming {
     /// Tranceiver Delay Compensation
     pub transceiver_delay_compensation: bool,
     ///  The value by which the oscillator frequency is divided to generate the bit time quanta. The bit
-    ///  time is built up from a multiple of this quanta. Valid values for the Baud Rate Prescaler are 0
-    ///  to 31. The hardware interpreters this value as the value programmed plus 1.
-    pub prescaler: u8,
-    /// Valid values are 0 to 31. The value used by the hardware is the one programmed,
-    /// incremented by 1, i.e. tBS1 = (DTSEG1 + 1) x tq.
-    pub seg1: u8,
-    /// Valid values are 0 to 15. The value used by the hardware is the one programmed,
-    /// incremented by 1, i.e. tBS2 = (DTSEG2 + 1) x tq.
-    pub seg2: u8,
-    /// Must always be smaller than DTSEG2, valid values are 0 to 15. The value used by the
-    /// hardware is the one programmed, incremented by 1: tSJW = (DSJW + 1) x tq.
-    pub sync_jump_width: u8,
+    ///  time is built up from a multiple of this quanta. Valid values for the Baud Rate Prescaler are 1
+    ///  to 31.
+    pub prescaler: NonZeroU8,
+    /// Valid values are 1 to 31.
+    pub seg1: NonZeroU8,
+    /// Valid values are 1 to 15.
+    pub seg2: NonZeroU8,
+    /// Must always be smaller than DTSEG2, valid values are 1 to 15.
+    pub sync_jump_width: NonZeroU8,
 }
 impl DataBitTiming {
     // #[inline]
@@ -91,19 +84,19 @@ impl DataBitTiming {
     // }
     #[inline]
     pub(crate) fn dbrp(&self) -> u8 {
-        self.prescaler & 0x1F
+        u8::from(self.prescaler) & 0x1F
     }
     #[inline]
     pub(crate) fn dtseg1(&self) -> u8 {
-        self.seg1 & 0x1F
+        u8::from(self.seg1) & 0x1F
     }
     #[inline]
     pub(crate) fn dtseg2(&self) -> u8 {
-        self.seg2 & 0x0F
+        u8::from(self.seg2) & 0x0F
     }
     #[inline]
     pub(crate) fn dsjw(&self) -> u8 {
-        self.sync_jump_width & 0x0F
+        u8::from(self.sync_jump_width) & 0x0F
     }
 }
 
@@ -112,10 +105,10 @@ impl Default for DataBitTiming {
     fn default() -> Self {
         Self {
             transceiver_delay_compensation: false,
-            prescaler: 0,
-            seg1: 0xA,
-            seg2: 0x3,
-            sync_jump_width: 0x3,
+            prescaler: NonZeroU8::new(1).unwrap(),
+            seg1: NonZeroU8::new(0xA).unwrap(),
+            seg2: NonZeroU8::new(0x3).unwrap(),
+            sync_jump_width: NonZeroU8::new(0x3).unwrap(),
         }
     }
 }
@@ -366,7 +359,7 @@ impl Default for FdCanConfig {
         Self {
             nbtr: NominalBitTiming::default(),
             dbtr: DataBitTiming::default(),
-            automatic_retransmit: false,
+            automatic_retransmit: true,
             transmit_pause: false,
             frame_transmit: FrameTransmissionConfig::ClassicCanOnly,
             non_iso_mode: false,
