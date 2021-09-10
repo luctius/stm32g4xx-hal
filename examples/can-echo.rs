@@ -62,11 +62,11 @@ fn main() -> ! {
 
     let mut can1 = {
         info!("Init CAN 1");
-        let rx = gpiob.pb8.into_alternate_open_drain();
-        let tx = gpiob.pb9.into_alternate_open_drain();
+        let rx = gpiob.pb8.into_alternate();
+        let tx = gpiob.pb9.into_alternate();
 
         info!("-- Create CAN 1 instance");
-        let can = crate::hal::can::FdCan::new(dp.FDCAN1, (tx, rx), &rcc);
+        let can = crate::hal::can::FdCan::new(dp.FDCAN1, tx, rx, &rcc);
 
         info!("-- Set CAN 1 in Config Mode");
         let mut can = FdCan::new(can).into_config_mode();
@@ -88,59 +88,74 @@ fn main() -> ! {
         can.into_normal()
     };
 
-    // let mut can2 = {
-    //     info!("Init CAN 2");
-    //     let rx = gpiob.pb12.into_alternate_open_drain();
-    //     let tx = gpiob.pb13.into_alternate_open_drain();
+    let mut can2 = {
+        info!("Init CAN 2");
+        let rx = gpiob.pb5.into_alternate();
+        let tx = gpiob.pb13.into_alternate();
 
-    //     info!("-- Create CAN 2 instance");
-    //     let can = crate::hal::can::FdCan::new(dp.FDCAN2, (tx, rx), &rcc);
+        info!("-- Create CAN 2 instance");
+        let can = crate::hal::can::FdCan::new(dp.FDCAN2, tx, rx, &rcc);
 
-    //     info!("-- Set CAN in Config Mode");
-    //     let mut can = FdCan::new(can).into_config_mode();
+        info!("-- Set CAN in Config Mode");
+        let mut can = FdCan::new(can).into_config_mode();
 
-    //     info!("-- Configure nominal timing");
-    //     can.set_nominal_bit_timing(btr);
+        info!("-- Configure nominal timing");
+        can.set_nominal_bit_timing(btr);
 
-    //     info!("-- Configure Filters");
-    //     can.set_standard_filter(
-    //         StandardFilterSlot::_0,
-    //         StandardFilter::accept_all_into_fifo0(),
-    //     );
+        info!("-- Configure Filters");
+        can.set_standard_filter(
+            StandardFilterSlot::_0,
+            StandardFilter::accept_all_into_fifo0(),
+        );
 
-    //     info!("-- Set CAN1 in to normal mode");
-    //     can.into_external_loopback()
-    //     // can.into_normal()
-    // };
+        info!("-- Set CAN1 in to normal mode");
+        // can.into_external_loopback()
+        can.into_normal()
+    };
 
-    let mut can = can1;
+    let mut can = can2;
 
     info!("Create Message Data");
-    let mut buffer = [0xAAAAAAAA, 0xAAAAAAAA];
+    let mut buffer = [0xAAAAAAAA, 0xFFFFFFFF, 0x0, 0x0, 0x0, 0x0];
     info!("Create Message Header");
     let header = TxFrameHeader {
-        len: buffer.len() as u8 * 4,
+        len: 2 * 4,
         id: StandardId::new(0x1).unwrap().into(),
         frame_format: FrameFormat::Standard,
         bit_rate_switching: false,
         marker: None,
     };
-    info!("Initial Header: {:?}", &header);
+    info!("Initial Header: {:#X?}", &header);
 
     info!("Transmit initial message");
-    block!(can.transmit(header, &mut |b| b.clone_from_slice(&buffer))).unwrap();
+    block!(can.transmit(
+        header,
+        &mut |b| {
+            let len = b.len();
+            for i in (0..len) {
+                b[i] = buffer[i];
+            }
+        },
+    ))
+    .unwrap();
 
     loop {
         if let Ok(rxheader) = block!(can.receive0(&mut |h, b| {
-            info!("Receive");
-            info!("Received Header: {:?}", &h);
-            buffer.clone_from_slice(b);
+            info!("Received Header: {:#X?}", &h);
+            info!("received data: {:X?}", &b);
+
+            for (i, d) in b.iter().enumerate() {
+                buffer[i] = *d;
+            }
             h
         })) {
             block!(
                 can.transmit(rxheader.unwrap().to_tx_header(None), &mut |b| {
-                    info!("Transmit");
-                    b.clone_from_slice(&buffer)
+                    let len = b.len();
+                    for i in (0..len) {
+                        b[i] = buffer[i];
+                    }
+                    info!("Transmit: {:X?}", b);
                 })
             )
             .unwrap();

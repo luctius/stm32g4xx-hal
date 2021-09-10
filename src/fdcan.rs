@@ -419,39 +419,6 @@ where
         }
     }
 
-    /// Clears the "Request Completed" (RQCP) flag of a transmit mailbox.
-    ///
-    /// Returns the [`Mailbox`] whose flag was cleared. If no mailbox has the flag set, returns
-    /// `None`.
-    ///
-    /// Once this function returns `None`, a pending [`Interrupt::TransmitMailboxEmpty`] is
-    /// considered acknowledged.
-    pub fn clear_request_completed_flag(&mut self) -> Option<Mailbox> {
-        todo!()
-        // let can = self.registers();
-        // let tsr = can.tsr.read();
-        // if tsr.rqcp0().bit_is_set() {
-        //     can.tsr.modify(|_, w| w.rqcp0().set_bit());
-        //     Some(Mailbox::Mailbox0)
-        // } else if tsr.rqcp1().bit_is_set() {
-        //     can.tsr.modify(|_, w| w.rqcp1().set_bit());
-        //     Some(Mailbox::Mailbox1)
-        // } else if tsr.rqcp2().bit_is_set() {
-        //     can.tsr.modify(|_, w| w.rqcp2().set_bit());
-        //     Some(Mailbox::Mailbox2)
-        // } else {
-        // None
-        // }
-    }
-
-    /// Clears a pending TX interrupt ([`Interrupt::TransmitMailboxEmpty`]).
-    ///
-    /// This does not return the mailboxes that have finished tranmission. If you need that
-    /// information, call [`FdCan::clear_request_completed_flag`] instead.
-    pub fn clear_tx_interrupt(&mut self) {
-        while self.clear_request_completed_flag().is_some() {}
-    }
-
     /// Retrieve the current protocol status
     pub fn get_protocol_status(&self) -> ProtocolStatus {
         let psr = self.registers().psr.read();
@@ -980,23 +947,8 @@ where
     ///
     /// Frames are transmitted to the bus based on their priority (identifier).
     /// Transmit order is preserved for frames with identical identifiers.
-    /// If all transmit mailboxes are full, a higher priority frame replaces the
-    /// lowest priority frame, which is returned as `Ok(Some(frame))`.
-    // #[inline]
-    // pub fn transmit_preserve<WTX, PTX, P>(
-    //     &mut self,
-    //     frame: TxFrameHeader,
-    //     write: &mut WTX,
-    //     previous: Option<&mut PTX>,
-    // ) -> nb::Result<Option<P>, Infallible>
-    // where
-    //     PTX: FnMut(Mailbox, TxFrameHeader, &[u32]) -> P,
-    //     WTX: FnMut(&mut [u32]),
-    // {
-    //     // Safety: We have a `&mut self` and have unique access to the peripheral.
-    //     unsafe { Tx::<I, M>::conjure().transmit_preserve(frame, write, previous) }
-    // }
-
+    /// If all transmit mailboxes are full, this overwrites the mailbox with
+    /// the lowest priority.
     #[inline]
     pub fn transmit<WTX>(
         &mut self,
@@ -1008,6 +960,26 @@ where
     {
         // Safety: We have a `&mut self` and have unique access to the peripheral.
         unsafe { Tx::<I, M>::conjure().transmit(frame, write) }
+    }
+
+    /// Puts a CAN frame in a free transmit mailbox for transmission on the bus.
+    ///
+    /// Frames are transmitted to the bus based on their priority (identifier).
+    /// Transmit order is preserved for frames with identical identifiers.
+    /// If all transmit mailboxes are full, `pending` is called with the mailbox,
+    /// header and data of the to-be-replaced frame.
+    pub fn transmit_preserve<PTX, WTX, P>(
+        &mut self,
+        frame: TxFrameHeader,
+        write: &mut WTX,
+        pending: &mut PTX,
+    ) -> nb::Result<Option<P>, Infallible>
+    where
+        PTX: FnMut(Mailbox, TxFrameHeader, &[u32]) -> P,
+        WTX: FnMut(&mut [u32]),
+    {
+        // Safety: We have a `&mut self` and have unique access to the peripheral.
+        unsafe { Tx::<I, M>::conjure().transmit_preserve(frame, write, pending) }
     }
 
     /// Returns `true` if no frame is pending for transmission.
@@ -1172,6 +1144,20 @@ where
     where
         WTX: FnMut(&mut [u32]),
     {
+        self.transmit_preserve(frame, write, &mut |mb, txh, b| ())
+    }
+
+    /// Transmit, but run pending
+    pub fn transmit_preserve<PTX, WTX, P>(
+        &mut self,
+        frame: TxFrameHeader,
+        write: &mut WTX,
+        pending: &mut PTX,
+    ) -> nb::Result<Option<P>, Infallible>
+    where
+        PTX: FnMut(Mailbox, TxFrameHeader, &[u32]) -> P,
+        WTX: FnMut(&mut [u32]),
+    {
         let can = self.registers();
         let queue_is_full = self.tx_queue_is_full();
 
@@ -1183,29 +1169,17 @@ where
             if self.is_available(Mailbox::_0, id) {
                 (
                     Mailbox::_0,
-                    if self.abort(Mailbox::_0) {
-                        Some(())
-                    } else {
-                        None
-                    },
+                    self.abort_pending_mailbox(Mailbox::_0, pending),
                 )
             } else if self.is_available(Mailbox::_1, id) {
                 (
                     Mailbox::_1,
-                    if self.abort(Mailbox::_1) {
-                        Some(())
-                    } else {
-                        None
-                    },
+                    self.abort_pending_mailbox(Mailbox::_1, pending),
                 )
             } else if self.is_available(Mailbox::_2, id) {
                 (
                     Mailbox::_2,
-                    if self.abort(Mailbox::_2) {
-                        Some(())
-                    } else {
-                        None
-                    },
+                    self.abort_pending_mailbox(Mailbox::_2, pending),
                 )
             } else {
                 // For now we bail when there is no lower priority slot available
@@ -1223,56 +1197,6 @@ where
 
         Ok(pending_frame)
     }
-
-    // pub fn transmit_preserve<PTX, WTX, P>(
-    //     &mut self,
-    //     frame: TxFrameHeader,
-    //     write: &mut WTX,
-    //     pending: Option<&mut PTX>,
-    // ) -> nb::Result<Option<P>, Infallible>
-    // where
-    //     PTX: FnMut(Mailbox, TxFrameHeader, &[u32]) -> P,
-    //     WTX: FnMut(&mut [u32]),
-    // {
-    //     let can = self.registers();
-    //     let queue_is_full = self.tx_queue_is_full();
-
-    //     let id = frame.into();
-
-    //     // If the queue is full,
-    //     // Discard the first slot with a lower priority message
-    //     let (idx, pending_frame) = if queue_is_full {
-    //         if self.is_available(Mailbox::_0, id) {
-    //             (
-    //                 Mailbox::_0,
-    //                 self.abort_pending_mailbox(Mailbox::_0, pending),
-    //             )
-    //         } else if self.is_available(Mailbox::_1, id) {
-    //             (
-    //                 Mailbox::_1,
-    //                 self.abort_pending_mailbox(Mailbox::_1, pending),
-    //             )
-    //         } else if self.is_available(Mailbox::_2, id) {
-    //             (
-    //                 Mailbox::_2,
-    //                 self.abort_pending_mailbox(Mailbox::_2, pending),
-    //             )
-    //         } else {
-    //             // For now we bail when there is no lower priority slot available
-    //             // Can this lead to priority inversion?
-    //             return Err(nb::Error::WouldBlock);
-    //         }
-    //     } else {
-    //         // Read the Write Pointer
-    //         let idx = can.txfqs.read().tfqpi().bits();
-
-    //         (Mailbox::new(idx), None)
-    //     };
-
-    //     self.write_mailbox(idx, frame, write);
-
-    //     Ok(pending_frame)
-    // }
 
     /// Returns if the tx queue is able to accept new messages without having to cancel an existing one
     #[inline]
@@ -1322,25 +1246,25 @@ where
         result
     }
 
-    // #[inline]
-    // fn abort_pending_mailbox<PTX, R>(&mut self, idx: Mailbox, pending: Option<PTX>) -> Option<R>
-    // where
-    //     PTX: FnOnce(Mailbox, TxFrameHeader, &[u32]) -> R,
-    // {
-    //     if self.abort(idx) {
-    //         let tx_ram = self.tx_msg_ram();
+    #[inline]
+    fn abort_pending_mailbox<PTX, R>(&mut self, idx: Mailbox, pending: PTX) -> Option<R>
+    where
+        PTX: FnOnce(Mailbox, TxFrameHeader, &[u32]) -> R,
+    {
+        if self.abort(idx) {
+            let tx_ram = self.tx_msg_ram();
 
-    //         //read back header section
-    //         let header = (&tx_ram.tbsa[idx as usize].header).into();
-    //         pending.map(|pending| pending(idx, header, &tx_ram.tbsa[idx as usize].data))
-    //     } else {
-    //         // Abort request failed because the frame was already sent (or being sent) on
-    //         // the bus. All mailboxes are now free. This can happen for small prescaler
-    //         // values (e.g. 1MBit/s bit timing with a source clock of 8MHz) or when an ISR
-    //         // has preempted the execution.
-    //         None
-    //     }
-    // }
+            //read back header section
+            let header = (&tx_ram.tbsa[idx as usize].header).into();
+            Some(pending(idx, header, &tx_ram.tbsa[idx as usize].data))
+        } else {
+            // Abort request failed because the frame was already sent (or being sent) on
+            // the bus. All mailboxes are now free. This can happen for small prescaler
+            // values (e.g. 1MBit/s bit timing with a source clock of 8MHz) or when an ISR
+            // has preempted the execution.
+            None
+        }
+    }
 
     /// Attempts to abort the sending of a frame that is pending in a mailbox.
     ///
@@ -1387,13 +1311,18 @@ where
         can.txbrp.read().trp().bits() == 0x0
     }
 
-    /// Clears the request complete flag for all mailboxes.
+    /// Clears the transmission complete flag.
     #[inline]
-    pub fn clear_interrupt_flags(&mut self) {
-        // let can = self.registers();
-        // can.tsr
-        //     .write(|w| w.rqcp2().set_bit().rqcp1().set_bit().rqcp0().set_bit());
-        todo!()
+    pub fn clear_transmission_completed_flag(&mut self) {
+        let can = self.registers();
+        can.ir.write(|w| w.tc().set_bit());
+    }
+
+    /// Clears the transmission cancelled flag.
+    #[inline]
+    pub fn clear_transmission_cancelled_flag(&mut self) {
+        let can = self.registers();
+        can.ir.write(|w| w.tcf().set_bit());
     }
 }
 
