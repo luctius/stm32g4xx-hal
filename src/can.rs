@@ -215,6 +215,7 @@ where
         RX: sealed::Rx<Instance>,
     {
         Instance::enable(rcc);
+        //TODO: Set Speed to VeryHigh?
         FdCan { _peripheral: can }
     }
 

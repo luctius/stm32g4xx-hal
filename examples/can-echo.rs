@@ -9,7 +9,7 @@ use crate::hal::{
         id::StandardId,
         FdCan,
     },
-    gpio::GpioExt,
+    gpio::{GpioExt as _, Speed},
     nb::block,
     rcc::{Config, MCOExt as _, MCOSrc, PLLSrc, PllConfig, Prescaler, RccExt, SysClockSrc},
     stm32::Peripherals,
@@ -62,8 +62,8 @@ fn main() -> ! {
 
     let mut can1 = {
         info!("Init CAN 1");
-        let rx = gpiob.pb8.into_alternate();
-        let tx = gpiob.pb9.into_alternate();
+        let rx = gpiob.pb8.into_alternate().set_speed(Speed::VeryHigh);
+        let tx = gpiob.pb9.into_alternate().set_speed(Speed::VeryHigh);
 
         info!("-- Create CAN 1 instance");
         let can = crate::hal::can::FdCan::new(dp.FDCAN1, tx, rx, &rcc);
@@ -90,8 +90,8 @@ fn main() -> ! {
 
     let mut can2 = {
         info!("Init CAN 2");
-        let rx = gpiob.pb5.into_alternate();
-        let tx = gpiob.pb13.into_alternate();
+        let rx = gpiob.pb5.into_alternate().set_speed(Speed::VeryHigh);
+        let tx = gpiob.pb13.into_alternate().set_speed(Speed::VeryHigh);
 
         info!("-- Create CAN 2 instance");
         let can = crate::hal::can::FdCan::new(dp.FDCAN2, tx, rx, &rcc);

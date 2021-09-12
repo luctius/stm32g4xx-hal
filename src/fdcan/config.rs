@@ -1,5 +1,5 @@
 pub use super::interrupt::{Interrupt, InterruptLine, Interrupts};
-use core::num::{NonZeroU8,NonZeroU16};
+use core::num::{NonZeroU16, NonZeroU8};
 
 /// Configures the bit timings.
 ///
@@ -217,6 +217,78 @@ pub enum TimestampSource {
     FromTIM3,
 }
 
+/// How to handle frames in the global filter
+#[derive(Clone, Copy, Debug)]
+#[cfg_attr(feature = "unstable-defmt", derive(defmt::Format))]
+pub enum NonMatchingFilter {
+    /// Frames will go to Fifo0 when they do no match any specific filter
+    IntoRxFifo0 = 0b00,
+    /// Frames will go to Fifo1 when they do no match any specific filter
+    IntoRxFifo1 = 0b01,
+    /// Frames will be rejected when they do not match any specific filter
+    Reject = 0b11,
+}
+
+/// How to handle frames which do not match a specific filter
+#[derive(Clone, Copy, Debug)]
+#[cfg_attr(feature = "unstable-defmt", derive(defmt::Format))]
+pub struct GlobalFilter {
+    /// How to handle non-matching standard frames
+    pub handle_standard_frames: NonMatchingFilter,
+
+    /// How to handle non-matching extended frames
+    pub handle_extended_frames: NonMatchingFilter,
+
+    /// How to handle remote standard frames
+    pub reject_remote_standard_frames: bool,
+
+    /// How to handle remote extended frames
+    pub reject_remote_extended_frames: bool,
+}
+impl GlobalFilter {
+    /// Reject all non-matching and remote frames
+    pub const fn reject_all() -> Self {
+        Self {
+            handle_standard_frames: NonMatchingFilter::Reject,
+            handle_extended_frames: NonMatchingFilter::Reject,
+            reject_remote_standard_frames: true,
+            reject_remote_extended_frames: true,
+        }
+    }
+    
+    /// How to handle non-matching standard frames
+    pub const fn set_handle_standard_frames(mut self, filter: NonMatchingFilter) -> Self {
+        self.handle_standard_frames = filter;
+        self
+    }
+    /// How to handle non-matching exteded frames
+    pub const fn set_handle_extended_frames(mut self, filter: NonMatchingFilter) -> Self {
+        self.handle_extended_frames = filter;
+        self
+    }
+    /// How to handle remote standard frames
+    pub const fn set_reject_remote_standard_frames(mut self, filter: bool) -> Self {
+        self.reject_remote_standard_frames = filter;
+        self
+    }
+    /// How to handle remote extended frames
+    pub const fn set_reject_remote_extended_frames(mut self, filter: bool) -> Self {
+        self.reject_remote_extended_frames = filter;
+        self
+    }
+}
+impl Default for GlobalFilter {
+    #[inline]
+    fn default() -> Self {
+        Self {
+            handle_standard_frames: NonMatchingFilter::IntoRxFifo0,
+            handle_extended_frames: NonMatchingFilter::IntoRxFifo0,
+            reject_remote_standard_frames: false,
+            reject_remote_extended_frames: false,
+        }
+    }
+}
+
 /// FdCan Config Struct
 #[derive(Clone, Copy, Debug)]
 #[cfg_attr(feature = "unstable-defmt", derive(defmt::Format))]
@@ -261,20 +333,21 @@ pub struct FdCanConfig {
     pub interrupt_line_config: Interrupts,
     /// Sets the timestamp source
     pub timestamp_source: TimestampSource,
-    //TODO: Config Global Filter
+    /// Configures the Global Filter
+    pub global_filter: GlobalFilter,
 }
 
 impl FdCanConfig {
     /// Configures the bit timings.
     #[inline]
-    pub fn set_nominal_bit_timing(mut self, btr: NominalBitTiming) -> Self {
+    pub const fn set_nominal_bit_timing(mut self, btr: NominalBitTiming) -> Self {
         self.nbtr = btr;
         self
     }
 
     /// Configures the bit timings.
     #[inline]
-    pub fn set_data_bit_timing(mut self, btr: DataBitTiming) -> Self {
+    pub const fn set_data_bit_timing(mut self, btr: DataBitTiming) -> Self {
         self.dbtr = btr;
         self
     }
@@ -286,7 +359,7 @@ impl FdCanConfig {
     ///
     /// Automatic retransmission is enabled by default.
     #[inline]
-    pub fn set_automatic_retransmit(mut self, enabled: bool) -> Self {
+    pub const fn set_automatic_retransmit(mut self, enabled: bool) -> Self {
         self.automatic_retransmit = enabled;
         self
     }
@@ -297,7 +370,7 @@ impl FdCanConfig {
     /// "babbling idiot" scenarios where the application program erroneously requests too many
     /// transmissions.
     #[inline]
-    pub fn set_transmit_pause(mut self, enabled: bool) -> Self {
+    pub const fn set_transmit_pause(mut self, enabled: bool) -> Self {
         self.transmit_pause = enabled;
         self
     }
@@ -305,50 +378,57 @@ impl FdCanConfig {
     /// If this is set, the FDCAN uses the CAN FD frame format as specified by the Bosch CAN
     /// FD Specification V1.0.
     #[inline]
-    pub fn set_non_iso_mode(mut self, enabled: bool) -> Self {
+    pub const fn set_non_iso_mode(mut self, enabled: bool) -> Self {
         self.non_iso_mode = enabled;
         self
     }
 
     /// Two consecutive dominant tq required to detect an edge for hard synchronization
     #[inline]
-    pub fn set_edge_filtering(mut self, enabled: bool) -> Self {
+    pub const fn set_edge_filtering(mut self, enabled: bool) -> Self {
         self.edge_filtering = enabled;
         self
     }
 
     /// Sets the allowed transmission types for messages.
     #[inline]
-    pub fn set_frame_transmit(mut self, fts: FrameTransmissionConfig) -> Self {
+    pub const fn set_frame_transmit(mut self, fts: FrameTransmissionConfig) -> Self {
         self.frame_transmit = fts;
         self
     }
 
     /// Enables protocol exception handling
     #[inline]
-    pub fn set_protocol_exception_handling(mut self, peh: bool) -> Self {
+    pub const fn set_protocol_exception_handling(mut self, peh: bool) -> Self {
         self.protocol_exception_handling = peh;
         self
     }
 
     /// Configures which interrupt go to which interrupt lines
     #[inline]
-    pub fn set_interrupt_line_config(mut self, l0int: Interrupts) -> Self {
+    pub const fn set_interrupt_line_config(mut self, l0int: Interrupts) -> Self {
         self.interrupt_line_config = l0int;
         self
     }
 
     /// Sets the general clock divider for this FdCAN instance
     #[inline]
-    pub fn set_clock_divider(mut self, div: ClockDivider) -> Self {
+    pub const fn set_clock_divider(mut self, div: ClockDivider) -> Self {
         self.clock_divider = div;
         self
     }
 
     /// Sets the timestamp source
     #[inline]
-    pub fn set_timestamp_source(mut self, tss: TimestampSource) -> Self {
+    pub const fn set_timestamp_source(mut self, tss: TimestampSource) -> Self {
         self.timestamp_source = tss;
+        self
+    }
+
+    /// Sets the global filter settings
+    #[inline]
+    pub const fn set_global_filter(mut self, filter: GlobalFilter) -> Self {
+        self.global_filter = filter;
         self
     }
 }
@@ -368,6 +448,7 @@ impl Default for FdCanConfig {
             protocol_exception_handling: true,
             clock_divider: ClockDivider::_1,
             timestamp_source: TimestampSource::None,
+            global_filter: GlobalFilter::default(),
         }
     }
 }

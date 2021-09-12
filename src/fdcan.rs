@@ -21,7 +21,7 @@ use id::{Id, IdReg};
 use crate::stm32::fdcan::RegisterBlock;
 use config::{
     ClockDivider, DataBitTiming, FdCanConfig, FrameTransmissionConfig, NominalBitTiming,
-    TimestampSource,
+    TimestampSource, GlobalFilter,
 };
 use filter::{
     ActivateFilter as _, ExtendedFilter, ExtendedFilterSlot, StandardFilter, StandardFilterSlot,
@@ -635,6 +635,7 @@ where
         self.set_non_iso_mode(config.non_iso_mode);
         self.set_edge_filtering(config.edge_filtering);
         self.set_protocol_exception_handling(config.protocol_exception_handling);
+        self.set_global_filter(config.global_filter);
     }
 
     /// Configures the bit timings.
@@ -787,6 +788,19 @@ where
 
         self.control.config.timestamp_source = select;
     }
+    
+    /// Configures the global filter settings
+    #[inline]
+    pub fn set_global_filter(&mut self, filter: GlobalFilter) {
+        self.registers().rxgfc.modify(|_, w| unsafe { w
+            .anfs().bits(filter.handle_standard_frames as u8)
+            .anfe().bits(filter.handle_extended_frames as u8)
+        }
+        .rrfs().bit(filter.reject_remote_standard_frames)
+        .rrfe().bit(filter.reject_remote_extended_frames)
+        );
+    }
+        
     /// Returns the current FdCan timestamp counter
     #[inline]
     pub fn timestamp(&self) -> u16 {
