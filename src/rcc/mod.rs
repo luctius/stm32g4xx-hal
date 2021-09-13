@@ -8,6 +8,8 @@ mod enable;
 pub use clockout::*;
 pub use config::*;
 
+pub trait Instance: crate::Sealed + Enable + Reset + GetBusFreq {}
+
 /// HSI speed
 pub const HSI_FREQ: u32 = 16_000_000;
 

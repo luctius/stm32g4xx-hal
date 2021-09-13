@@ -11,7 +11,7 @@ use crate::hal::{
     },
     gpio::{GpioExt as _, Speed},
     nb::block,
-    rcc::{Config, MCOExt as _, MCOSrc, PLLSrc, PllConfig, Prescaler, RccExt, SysClockSrc},
+    rcc::{Config, RccExt, SysClockSrc},
     stm32::Peripherals,
     time::U32Ext,
 };
@@ -57,19 +57,18 @@ fn main() -> ! {
 
     info!("Split GPIO");
 
-    let gpioa = dp.GPIOA.split(&mut rcc);
     let gpiob = dp.GPIOB.split(&mut rcc);
 
-    let mut can1 = {
+    let can1 = {
         info!("Init CAN 1");
         let rx = gpiob.pb8.into_alternate().set_speed(Speed::VeryHigh);
         let tx = gpiob.pb9.into_alternate().set_speed(Speed::VeryHigh);
 
         info!("-- Create CAN 1 instance");
-        let can = crate::hal::can::FdCan::new(dp.FDCAN1, tx, rx, &rcc);
+        let can = FdCan::new(dp.FDCAN1, tx, rx, &rcc);
 
         info!("-- Set CAN 1 in Config Mode");
-        let mut can = FdCan::new(can).into_config_mode();
+        let mut can = can.into_config_mode();
         can.set_protocol_exception_handling(false);
 
         info!("-- Configure nominal timing");
@@ -88,16 +87,16 @@ fn main() -> ! {
         can.into_normal()
     };
 
-    let mut can2 = {
+    let can2 = {
         info!("Init CAN 2");
         let rx = gpiob.pb5.into_alternate().set_speed(Speed::VeryHigh);
         let tx = gpiob.pb13.into_alternate().set_speed(Speed::VeryHigh);
 
         info!("-- Create CAN 2 instance");
-        let can = crate::hal::can::FdCan::new(dp.FDCAN2, tx, rx, &rcc);
+        let can = FdCan::new(dp.FDCAN2, tx, rx, &rcc);
 
         info!("-- Set CAN in Config Mode");
-        let mut can = FdCan::new(can).into_config_mode();
+        let mut can = can.into_config_mode();
 
         info!("-- Configure nominal timing");
         can.set_nominal_bit_timing(btr);
@@ -108,7 +107,7 @@ fn main() -> ! {
             StandardFilter::accept_all_into_fifo0(),
         );
 
-        info!("-- Set CAN1 in to normal mode");
+        info!("-- Set CAN2 in to normal mode");
         // can.into_external_loopback()
         can.into_normal()
     };
@@ -128,15 +127,12 @@ fn main() -> ! {
     info!("Initial Header: {:#X?}", &header);
 
     info!("Transmit initial message");
-    block!(can.transmit(
-        header,
-        &mut |b| {
-            let len = b.len();
-            for i in (0..len) {
-                b[i] = buffer[i];
-            }
-        },
-    ))
+    block!(can.transmit(header, &mut |b| {
+        let len = b.len();
+        for i in 0..len {
+            b[i] = buffer[i];
+        }
+    },))
     .unwrap();
 
     loop {
@@ -152,7 +148,7 @@ fn main() -> ! {
             block!(
                 can.transmit(rxheader.unwrap().to_tx_header(None), &mut |b| {
                     let len = b.len();
-                    for i in (0..len) {
+                    for i in 0..len {
                         b[i] = buffer[i];
                     }
                     info!("Transmit: {:X?}", b);
