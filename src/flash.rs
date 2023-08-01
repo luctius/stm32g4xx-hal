@@ -19,7 +19,7 @@ pub type Result<T> = core::result::Result<T, Error>;
 pub enum Error {
     AddressLargerThanFlash,
     AddressMisaligned,
-    LengthNotMultiple2,
+    LengthNotMultiple8,
     LengthTooLong,
     EraseError,
     ProgrammingError,
@@ -97,7 +97,7 @@ impl<'a, const SECTOR_SZ_KB: u32> FlashWriter<'a, SECTOR_SZ_KB> {
             > FLASH_END
         {
             Err(Error::AddressLargerThanFlash)
-        } else if offset & 0x1 != 0 {
+        } else if offset & 0b111 != 0 {
             Err(Error::AddressMisaligned)
         } else {
             Ok(())
@@ -111,8 +111,8 @@ impl<'a, const SECTOR_SZ_KB: u32> FlashWriter<'a, SECTOR_SZ_KB> {
             > self.flash_sz.kbytes() as u32
         {
             Err(Error::LengthTooLong)
-        } else if length & 0x1 != 0 {
-            Err(Error::LengthNotMultiple2)
+        } else if length & 0b111 != 0 {
+            Err(Error::LengthNotMultiple8)
         } else {
             Ok(())
         }
@@ -125,9 +125,6 @@ impl<'a, const SECTOR_SZ_KB: u32> FlashWriter<'a, SECTOR_SZ_KB> {
         // Unlock Flash
         self.unlock()?;
 
-        // Set Page Erase
-        self.flash.cr.cr().modify(|_, w| w.per().set_bit());
-
         let page = start_offset / (SECTOR_SZ_KB as u32);
 
         // Write address bits
@@ -139,8 +136,11 @@ impl<'a, const SECTOR_SZ_KB: u32> FlashWriter<'a, SECTOR_SZ_KB> {
             self.flash
                 .cr
                 .cr()
-                .write(|w| w.pnb().bits(page.try_into().unwrap()));
+                .modify(|_, w| w.pnb().bits(page.try_into().unwrap()));
         }
+
+        // Set Page Erase
+        self.flash.cr.cr().modify(|_, w| w.per().set_bit());
 
         // Start Operation
         self.flash.cr.cr().modify(|_, w| w.strt().set_bit());
@@ -162,6 +162,8 @@ impl<'a, const SECTOR_SZ_KB: u32> FlashWriter<'a, SECTOR_SZ_KB> {
             Err(Error::EraseError)
         } else {
             if self.verify {
+                type Width = u16;
+
                 // By subtracting 1 from the sector size and masking with
                 // start_offset, we make 'start' point to the beginning of the
                 // page. We do this because the entire page should have been
@@ -169,10 +171,12 @@ impl<'a, const SECTOR_SZ_KB: u32> FlashWriter<'a, SECTOR_SZ_KB> {
                 // 'start_offset' was.
                 let size = SECTOR_SZ_KB;
                 let start = start_offset & !(size - 1);
-                for idx in (start..start + size).step_by(2) {
-                    let write_address = (FLASH_START + idx as u32) as *const u16;
-                    let verify: u16 = unsafe { core::ptr::read_volatile(write_address) };
-                    if verify != 0xFFFF {
+                for idx in (start..start + size).step_by((Width::BITS / 8) as usize) {
+                    let write_address = (FLASH_START + idx as u32) as *const Width;
+                    let verify: Width = unsafe { core::ptr::read_volatile(write_address) };
+                    if verify != Width::MAX {
+                        #[cfg(feature = "defmt")]
+                        defmt::trace!("@{:X}: {:X} != {:X}", write_address, verify, Width::MAX);
                         return Err(Error::VerifyError);
                     }
                 }
@@ -224,10 +228,10 @@ impl<'a, const SECTOR_SZ_KB: u32> FlashWriter<'a, SECTOR_SZ_KB> {
         // Unlock Flash
         self.unlock()?;
 
-        for idx in (0..data.len()).step_by(2) {
+        for idx in (0..data.len()).step_by(8) {
             self.valid_address(offset + idx as u32)?;
 
-            let write_address = (FLASH_START + offset + idx as u32) as *mut u16;
+            let write_address = (FLASH_START + offset + idx as u32) as *mut u64;
 
             // Set Page Programming to 1
             self.flash.cr.cr().modify(|_, w| w.pg().set_bit());
@@ -236,7 +240,14 @@ impl<'a, const SECTOR_SZ_KB: u32> FlashWriter<'a, SECTOR_SZ_KB> {
 
             // Flash is written 16 bits at a time, so combine two bytes to get a
             // half-word
-            let hword: u16 = (data[idx] as u16) | (data[idx + 1] as u16) << 8;
+            let hword: u64 = (data[idx] as u64) << 0
+                | (data[idx + 1] as u64) << 8
+                | (data[idx + 2] as u64) << 16
+                | (data[idx + 3] as u64) << 24
+                | (data[idx + 4] as u64) << 32
+                | (data[idx + 5] as u64) << 40
+                | (data[idx + 6] as u64) << 48
+                | (data[idx + 7] as u64) << 56;
 
             // NOTE(unsafe) Write to FLASH area with no side effects
             unsafe { core::ptr::write_volatile(write_address, hword) };
@@ -248,8 +259,15 @@ impl<'a, const SECTOR_SZ_KB: u32> FlashWriter<'a, SECTOR_SZ_KB> {
             self.flash.cr.cr().modify(|_, w| w.pg().clear_bit());
 
             // Check for errors
-            if self.flash.sr.sr().read().pgaerr().bit_is_set() {
+            if self.flash.sr.sr().read().pgaerr().bit_is_set()
+                | self.flash.sr.sr().read().pgserr().bit_is_set()
+                | self.flash.sr.sr().read().sizerr().bit_is_set()
+                | self.flash.sr.sr().read().progerr().bit_is_set()
+            {
                 self.flash.sr.sr().modify(|_, w| w.pgaerr().clear_bit());
+                self.flash.sr.sr().modify(|_, w| w.pgserr().clear_bit());
+                self.flash.sr.sr().modify(|_, w| w.sizerr().clear_bit());
+                self.flash.sr.sr().modify(|_, w| w.progerr().clear_bit());
 
                 self.lock()?;
                 return Err(Error::ProgrammingError);
@@ -261,9 +279,10 @@ impl<'a, const SECTOR_SZ_KB: u32> FlashWriter<'a, SECTOR_SZ_KB> {
             } else if self.verify {
                 // Verify written WORD
                 // NOTE(unsafe) read with no side effects within FLASH area
-                let verify: u16 = unsafe { core::ptr::read_volatile(write_address) };
+                let verify: u64 = unsafe { core::ptr::read_volatile(write_address) };
                 if verify != hword {
                     self.lock()?;
+
                     return Err(Error::VerifyError);
                 }
             }
