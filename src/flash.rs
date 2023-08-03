@@ -162,7 +162,7 @@ impl<'a, const SECTOR_SZ_KB: u32> FlashWriter<'a, SECTOR_SZ_KB> {
             Err(Error::EraseError)
         } else {
             if self.verify {
-                type Width = u16;
+                type Width = u32;
 
                 // By subtracting 1 from the sector size and masking with
                 // start_offset, we make 'start' point to the beginning of the
@@ -176,7 +176,7 @@ impl<'a, const SECTOR_SZ_KB: u32> FlashWriter<'a, SECTOR_SZ_KB> {
                     let verify: Width = unsafe { core::ptr::read_volatile(write_address) };
                     if verify != Width::MAX {
                         #[cfg(feature = "defmt")]
-                        defmt::trace!("@{:X}: {:X} != {:X}", write_address, verify, Width::MAX);
+                        defmt::error!("@{:X}: {:X} != {:X}", write_address, verify, Width::MAX);
                         return Err(Error::VerifyError);
                     }
                 }
@@ -233,11 +233,6 @@ impl<'a, const SECTOR_SZ_KB: u32> FlashWriter<'a, SECTOR_SZ_KB> {
 
             let write_address = (FLASH_START + offset + idx as u32) as *mut u64;
 
-            // Set Page Programming to 1
-            self.flash.cr.cr().modify(|_, w| w.pg().set_bit());
-
-            while self.flash.sr.sr().read().bsy().bit_is_set() {}
-
             // Flash is written 16 bits at a time, so combine two bytes to get a
             // half-word
             let hword: u64 = (data[idx] as u64) << 0
@@ -249,6 +244,25 @@ impl<'a, const SECTOR_SZ_KB: u32> FlashWriter<'a, SECTOR_SZ_KB> {
                 | (data[idx + 6] as u64) << 48
                 | (data[idx + 7] as u64) << 56;
 
+            let check: u64 = unsafe { core::ptr::read_volatile(write_address) };
+            for (cb, db) in check.to_le_bytes().iter().zip(data.iter()) {
+                if *cb != *db && *cb != u8::MAX {
+                    #[cfg(feature = "defmt")]
+                    defmt::error!(
+                        "@0x{:X}: 0x{:X} != (0x{:X} || 0x{:X})",
+                        write_address,
+                        cb,
+                        db,
+                        u8::MAX
+                    );
+                    return Err(Error::VerifyError);
+                }
+            }
+
+            // Set Page Programming to 1
+            self.flash.cr.cr().modify(|_, w| w.pg().set_bit());
+
+            while self.flash.sr.sr().read().bsy().bit_is_set() {}
             // NOTE(unsafe) Write to FLASH area with no side effects
             unsafe { core::ptr::write_volatile(write_address, hword) };
 
@@ -264,6 +278,17 @@ impl<'a, const SECTOR_SZ_KB: u32> FlashWriter<'a, SECTOR_SZ_KB> {
                 | self.flash.sr.sr().read().sizerr().bit_is_set()
                 | self.flash.sr.sr().read().progerr().bit_is_set()
             {
+                let check: u64 = unsafe { core::ptr::read_volatile(write_address) };
+                #[cfg(feature = "defmt")]
+                defmt::error!("@0x{:X}: 0x{:X} (0x{:X})", write_address, check, hword);
+
+                #[cfg(feature = "defmt")]
+                defmt::error!(
+                    "@{:X}: Programming error. (SR: 0b{:b})",
+                    write_address,
+                    self.flash.sr.sr().read().bits(),
+                );
+
                 self.flash.sr.sr().modify(|_, w| w.pgaerr().clear_bit());
                 self.flash.sr.sr().modify(|_, w| w.pgserr().clear_bit());
                 self.flash.sr.sr().modify(|_, w| w.sizerr().clear_bit());
@@ -305,6 +330,10 @@ impl<'a, const SECTOR_SZ_KB: u32> FlashWriter<'a, SECTOR_SZ_KB> {
     /// assumed to have succeeded.
     pub fn change_verification(&mut self, verify: bool) {
         self.verify = verify;
+    }
+
+    pub fn verify(&self) -> bool {
+        self.verify
     }
 }
 
