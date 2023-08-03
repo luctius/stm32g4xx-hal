@@ -259,6 +259,10 @@ impl<'a, const SECTOR_SZ_KB: u32> FlashWriter<'a, SECTOR_SZ_KB> {
                 }
             }
 
+            if check == hword {
+                continue;
+            }
+
             // Set Page Programming to 1
             self.flash.cr.cr().modify(|_, w| w.pg().set_bit());
 
